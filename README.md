@@ -1,7 +1,7 @@
 # Rover anfibio — simulazione interattiva
 
 Demo web (HTML/CSS/JS, WebGL2 con Three.js) di un rover anfibio da ispezione in un lago prealpino.
-Fase attuale: ambiente (lago, fondale, condotta sommersa, ottica subacquea) e **rover cingolato guidabile** dalla riva fino all'imbocco della condotta.
+Fase attuale: ambiente (lago, fondale, condotta sommersa, ottica subacquea) e **rover cingolato guidabile** dalla riva fino all'imbocco e dentro la condotta.
 
 ## Avvio locale (Windows, PowerShell)
 
@@ -44,7 +44,7 @@ Rover generico da ~1 m, non una riproduzione di una macchina reale. Parametri in
 | Attrito cingolo–fondo | 0.6 |
 | Resistenza idrodinamica (Cd·A frontale) | 0.32 m² |
 
-Modello: dinamica nel piano con inerzia (più massa aggiunta in acqua), trazione limitata da attrito × carico normale (il galleggiamento riduce l'aderenza), componente del peso lungo la pendenza, resistenza quadratica dell'acqua proporzionale all'immersione, sterzata per differenza di velocità dei cingoli contro la resistenza laterale. L'assetto segue il terreno sotto le quattro estremità dei cingoli. Condotta, muro di testata, tronchi e rocce alte più di ~25 cm bloccano il rover.
+Modello: dinamica nel piano con inerzia (più massa aggiunta in acqua), trazione limitata da attrito × carico normale (il galleggiamento riduce l'aderenza), componente del peso lungo la pendenza, resistenza quadratica dell'acqua proporzionale all'immersione, sterzata per differenza di velocità dei cingoli contro la resistenza laterale. L'assetto segue il terreno sotto le quattro estremità dei cingoli. Condotta (dall'esterno), muro di testata, tronchi e rocce alte più di ~25 cm bloccano il rover. La condotta (diametro interno 2.64 m) è percorribile: il rover entra dall'imbocco e viaggia sul fondo di sedimento; le pareti lo mantengono nel canale e lo riallineano all'asse. All'interno non arriva luce ambiente: servono i fari (L).
 
 Indicatori: la profondità è riferita al centro del telaio (0.3 m sopra il fondo dei cingoli); velocità lungo l'asse del rover; rotta con 0° = −z (verso il lago); distanza dall'imbocco misurata dal centro del rover.
 

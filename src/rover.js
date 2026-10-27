@@ -23,6 +23,7 @@ export const ROVER = {
   addedMass: 0.5,     // fraction of displaced water mass added to inertia
   steer: 0.22,        // differential track command at full steering
   radius: 0.58,       // m, plan-view collision radius
+  halfWidth: 0.41,    // m, half the overall width across the tracks
   lamp: 2.5,          // lamp radiant intensity (scene units)
 };
 const RHO = 1000, G = 9.81, HZ = 120;
@@ -269,7 +270,31 @@ export class Rover {
     const p = this.position, r0 = ROVER.radius;
     for (const o of this.obstacles) {
       let qx, qz;
-      if (o.type === 'capsule') {
+      if (o.type === 'pipe') {
+        const dx = p.x - o.mx, dz = p.z - o.mz;
+        const s = dx * o.ux + dz * o.uz, l = -dx * o.uz + dz * o.ux;
+        const lim = o.chord - ROVER.halfWidth;
+        // Funnel: a rover roughly lined up with the opening is guided onto the floor channel.
+        const allow = lim + clamp((-0.3 - s) / 1.5, 0, 1) * 0.6;
+        if (s > -3 && Math.abs(l) < lim + 0.65) {
+          if (Math.abs(l) > allow) {
+            const corr = (Math.sign(l) * allow - l);
+            p.x += -o.uz * corr; p.z += o.ux * corr;
+            const vl = -this.vel.x * o.uz + this.vel.y * o.ux;
+            if (vl * l > 0) { this.vel.x += o.uz * vl; this.vel.y -= o.ux * vl; }
+            // Track against the wall: the contact turns the rover parallel to the pipe.
+            let diff = Math.atan2(-o.ux, -o.uz) - this.yaw;
+            diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+            if (Math.abs(diff) > Math.PI / 2) diff -= Math.sign(diff) * Math.PI;
+            this.yaw += diff * Math.min(1, 3 / HZ);
+          }
+          if (s > o.len - 1) { p.x -= o.ux * (s - o.len + 1); p.z -= o.uz * (s - o.len + 1); }
+          continue;
+        }
+        const t = clamp(s, 0, o.len);
+        qx = o.mx + o.ux * t; qz = o.mz + o.uz * t;
+        o.r = o.ro;
+      } else if (o.type === 'capsule') {
         const dx = o.bx - o.ax, dz = o.bz - o.az;
         const l2 = dx * dx + dz * dz;
         const t = l2 > 0 ? clamp(((p.x - o.ax) * dx + (p.z - o.az) * dz) / l2, 0, 1) : 0;

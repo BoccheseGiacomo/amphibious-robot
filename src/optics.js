@@ -22,8 +22,11 @@ export const optics = {
   uDetail: { value: 1.0 },                             // 0 in the reflection pass: skip fine surface detail
   // Bore of the submerged pipe: its interior receives no ambient light.
   uPipeMouth: { value: new THREE.Vector3() },
-  uPipeDir: { value: new THREE.Vector3(0, 0, -1) },   // from the mouth into the pipe
-  uPipeR: { value: 0.83 },
+  uPipeDir: { value: new THREE.Vector3(0, 0, -1) },   // horizontal, from the mouth into the pipe
+  uPipeR: { value: 0.83 },                             // bore radius
+  uPipeSec: { value: 12 },                             // plan length of a section
+  uPipeN: { value: 0 },                                // number of sections
+  uPipeY: { value: new Array(24).fill(0) },            // axis height at each joint
   // Rover floodlights: positions, beam axes, radiant intensity (0 when off), cone cosines (outer, inner).
   uLampPos: { value: [new THREE.Vector3(), new THREE.Vector3()] },
   uLampDir: { value: [new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0, -1)] },
@@ -88,13 +91,20 @@ uniform float uDetail;
 uniform vec3 uPipeMouth;
 uniform vec3 uPipeDir;
 uniform float uPipeR;
+uniform float uPipeSec;
+uniform int uPipeN;
+uniform float uPipeY[24];
 
 // Distance behind the mouth plane for points inside the pipe bore, else 0.
 float pipeInside(vec3 p) {
-  vec3 d = p - uPipeMouth;
-  float s = dot(d, uPipeDir);
-  float r = length(d - uPipeDir * s);
-  return (s > 0.0 && r < uPipeR + 0.02) ? s : 0.0;
+  vec2 d = p.xz - uPipeMouth.xz;
+  float s = dot(d, uPipeDir.xz);
+  float u = s / uPipeSec;
+  if (s <= 0.0 || u >= float(uPipeN)) return 0.0;
+  int i = int(u);
+  float cy = mix(uPipeY[i], uPipeY[i + 1], u - float(i));     // axis follows the laid profile
+  float r = length(vec2(d.x * uPipeDir.z - d.y * uPipeDir.x, p.y - cy));
+  return r < uPipeR + 0.02 ? s : 0.0;
 }
 
 // Ambient light reaching a point inside the pipe decays away from the mouth.

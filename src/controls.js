@@ -103,6 +103,7 @@ export class ChaseCamera {
       Math.sin(this.pitch),
       Math.cos(yaw) * Math.cos(this.pitch),
     ).multiplyScalar(this.dist).add(t);
+    if (this.confine) this.confine(want, t);
     want.y = Math.max(want.y, this.groundAt(want.x, want.z) + 0.3);
     if (snap) this.camera.position.copy(want);
     else this.camera.position.lerp(want, 1 - Math.exp(-dt * 6));

@@ -250,15 +250,16 @@ function createPipe() {
   const add = (mesh) => { mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh); return mesh; };
 
   // Sections: lathe profiles along local +y, from the far joint towards the mouth.
-  // The first section carries a bevelled lip; the others overlap slightly under the flanges.
+  // The first section carries a bevelled lip at the mouth.
   const b = 0.015;
   for (let i = 0; i < joints.length - 1; i++) {
     const axis = new THREE.Vector3().subVectors(joints[i], joints[i + 1]);
-    const L = axis.length() + (i === 0 ? 0 : 0.05);
+    // Sections overlap 0.3 m at each joint so the slight bends leave no gap in the wall.
+    const L = axis.length() + (i === 0 ? 0 : 0.3), y0 = -0.3;
     axis.normalize();
     const prof = i === 0
-      ? [[R, 0], [R, L - b], [R - b, L], [Ri + b, L], [Ri, L - b], [Ri, 0]]
-      : [[R, 0], [R, L], [Ri, L], [Ri, 0]];
+      ? [[R, y0], [R, L - b], [R - b, L], [Ri + b, L], [Ri, L - b], [Ri, y0]]
+      : [[R, y0], [R, L], [Ri, L], [Ri, y0]];
     const tube = add(new THREE.Mesh(new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 64), steel));
     tube.quaternion.copy(orientAlong(axis));
     tube.position.copy(joints[i + 1]);
@@ -276,20 +277,11 @@ function createPipe() {
     flanges.setMatrixAt(i, _m.compose(joints[i], orientAlong(axis), _s.set(1, 1, 1)));
   }
 
-  // Concrete saddles at mid-section, partly buried.
-  const saddles = add(new THREE.InstancedMesh(new THREE.BoxGeometry(2.5, 0.9, 0.7), concrete, joints.length - 1));
-  for (let i = 0; i < joints.length - 1; i++) {
-    const axis = new THREE.Vector3().subVectors(joints[i + 1], joints[i]);
-    const q = new THREE.Quaternion().setFromEuler(_e.set(0, Math.atan2(axis.x, axis.z), 0));
-    _p.copy(joints[i]).lerp(joints[i + 1], i === 0 ? 0.6 : 0.5);
-    _p.y -= R * 0.72;
-    saddles.setMatrixAt(i, _m.compose(_p, q, _s.set(1, 1, 1)));
-  }
-
   // Headwall around the pipe, 1.6 m behind the mouth.
   const shape = new THREE.Shape();
   const bottom = -(R - PIPE.embed) - 1.0;
-  shape.moveTo(-2.6, bottom); shape.lineTo(2.6, bottom); shape.lineTo(2.6, 1.9); shape.lineTo(-2.6, 1.9); shape.closePath();
+  const HW = R + 1.7, TOP = R + 0.9;
+  shape.moveTo(-HW, bottom); shape.lineTo(HW, bottom); shape.lineTo(HW, TOP); shape.lineTo(-HW, TOP); shape.closePath();
   const hole = new THREE.Path();
   hole.absarc(0, 0, R + 0.03, 0, Math.PI * 2, true);
   shape.holes.push(hole);
@@ -298,11 +290,19 @@ function createPipe() {
   headwall.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), PIPE.dir);
   headwall.position.copy(PIPE.mouth).addScaledVector(PIPE.dir, 1.6);
 
-  const fl = R + 0.07;
-  for (let i = 0; i < joints.length - 1; i++) capsule(joints[i].x, joints[i].z, joints[i + 1].x, joints[i + 1].z, fl);
+  // The pipe: solid from outside, a channel on the sediment floor from inside.
   const axis = new THREE.Vector2(PIPE.dir.x, PIPE.dir.z).normalize();
-  const c = PIPE.mouth.clone().addScaledVector(PIPE.dir, 1.1);   // headwall spans 0.6–1.6 m behind the mouth
-  obstacles.push({ type: 'box', cx: c.x, cz: c.z, ux: axis.x, uz: axis.y, hl: 0.54, hw: 2.64 });
+  const fh = PIPE.embed - wall;                                    // floor height above the invert
+  const chord = Math.sqrt(Ri * Ri - (Ri - fh) * (Ri - fh));       // half width of the floor
+  obstacles.push({ type: 'pipe', mx: PIPE.mouth.x, mz: PIPE.mouth.z, ux: axis.x, uz: axis.y,
+    len: PIPE.mouth.distanceTo(PIPE.end), ro: R + 0.07, chord });
+  // Headwall on both sides of the opening (0.6–1.6 m behind the mouth).
+  const side = (R + 0.05 + HW) / 2, half = (HW - R - 0.05) / 2;
+  for (const sgn of [-1, 1]) {
+    const c = PIPE.mouth.clone().addScaledVector(PIPE.dir, 1.1);
+    c.x += -axis.y * side * sgn; c.z += axis.x * side * sgn;
+    obstacles.push({ type: 'box', cx: c.x, cz: c.z, ux: axis.x, uz: axis.y, hl: 0.54, hw: half + 0.04 });
+  }
 
   return group;
 }

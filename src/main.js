@@ -66,7 +66,10 @@ function build() {
 
 const { sky, rover, pipeline } = build();
 optics.uPipeMouth.value.copy(PIPE.mouth);
-optics.uPipeDir.value.copy(PIPE.dir);
+optics.uPipeDir.value.set(PIPE.dir.x, 0, PIPE.dir.z).normalize();
+optics.uPipeSec.value = PIPE.joints[0].distanceTo(PIPE.joints[1].clone().setY(PIPE.joints[0].y));
+optics.uPipeN.value = PIPE.joints.length - 1;
+PIPE.joints.forEach((j, i) => { optics.uPipeY.value[i] = j.y; });
 optics.uPipeR.value = PIPE.radius - PIPE.wall;
 
 // Start on the beach, facing the pipe across the water.
@@ -75,6 +78,15 @@ rover.reset(START.x, START.z, startYaw);
 
 const fly = new FlyControls(camera, heightAt);
 const chase = new ChaseCamera(camera, heightAt);
+// With the rover in the pipe, keep the chase camera inside the bore (and its forward extension).
+const _rel = new THREE.Vector3();
+chase.confine = (p, target) => {
+  if (_rel.subVectors(target, PIPE.mouth).dot(PIPE.dir) < -0.3) return;
+  const s = _rel.subVectors(p, PIPE.mouth).dot(PIPE.dir);
+  _rel.addScaledVector(PIPE.dir, -s);
+  const rmax = PIPE.radius - PIPE.wall - 0.3;
+  if (_rel.length() > rmax) p.copy(PIPE.mouth).addScaledVector(PIPE.dir, s).add(_rel.setLength(rmax));
+};
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 // Oblique view of the mouth from the front-right, slightly above.
 const pipeSide = new THREE.Vector3(-PIPE.dir.z, 0, PIPE.dir.x).normalize();
@@ -193,7 +205,11 @@ function renderView(dt, time, snap = false, fade = 1) {
 
   // Eye adaptation: brighter exposure as ambient light fades with depth.
   const depth = Math.max(0, -camera.position.y);
-  const target = 0.55 * (camera.position.y < 0 ? 2.2 + 3.2 * THREE.MathUtils.smoothstep(depth, 0, 20) : 1);
+  let target = 0.55 * (camera.position.y < 0 ? 2.2 + 3.2 * THREE.MathUtils.smoothstep(depth, 0, 20) : 1);
+  // Auto exposure of the camera inside the dark pipe.
+  _rel.subVectors(camera.position, PIPE.mouth);
+  const sIn = _rel.dot(PIPE.dir);
+  if (sIn > 0 && _rel.addScaledVector(PIPE.dir, -sIn).length() < PIPE.radius) target *= 1 + 1.5 * THREE.MathUtils.smoothstep(sIn, 0, 4);
   exposure = snap ? target : exposure + (target - exposure) * (1 - Math.exp(-dt * 2.5));
 
   pipeline.render(camera, time, exposure * fade);

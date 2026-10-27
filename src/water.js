@@ -236,7 +236,7 @@ export function createParticles(count = 9000, box = 26) {
         float depth = -vWPos.y;
         vec3 l;
         vec3 lamps = lampRadiance(0, vWPos, l) + lampRadiance(1, vWPos, l);
-        vec3 light = uSunColor * exp(-uWaterKd * depth) * 0.05 + uWaterScatter * 1.5 + lamps * 0.12;
+        vec3 light = (uSunColor * exp(-uWaterKd * depth) * 0.05 + uWaterScatter * 1.5) * pipeAmbient(vWPos) + lamps * 0.12;
         vec3 col = light * vec3(0.9, 1.0, 0.85);
         vec3 seen = waterPath(col, uEye, vWPos) - waterPath(vec3(0.0), uEye, vWPos);
         float a = vAlpha * soft * (1.0 - r * 4.0);

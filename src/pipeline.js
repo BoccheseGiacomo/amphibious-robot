@@ -74,6 +74,7 @@ export class Pipeline {
           vec2 q = causticCoord(x, z);
           float shaft = pow(causticPattern(q * 0.045, uTime * 0.18), 0.35) * 0.7
                       + pow(causticPattern(q * 0.11 + 0.3, uTime * 0.25), 0.5) * 0.3;
+          if (pipeInside(x) > 0.0) shaft = 0.0;   // no sunlight inside the pipe
           vec3 sun = exp(-uWaterKd * z * 1.25);
           acc += sun * shaft * exp(-uWaterExt * t) * dt;
         }

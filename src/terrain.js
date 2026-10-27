@@ -148,12 +148,13 @@ function bedAt(t) {
   return BED[i] + (BED[i + 1] - BED[i]) * (u - i);
 }
 
-const RADIUS = 0.9, EMBED = 0.25;
+// 2.8 m bore; the bed inside is a flat sediment floor EMBED - wall above the invert.
+const RADIUS = 1.4, EMBED = 0.35;
 const JOINTS = BED.map((b, i) => new THREE.Vector3(PM.x + P_AX * i / NSEC, b + RADIUS - EMBED, PM.z + P_AZ * i / NSEC));
 
 export const PIPE = {
   radius: RADIUS,
-  wall: 0.07,
+  wall: 0.08,
   embed: EMBED,
   joints: JOINTS,                                   // section ends, from the mouth outwards
   mouth: JOINTS[0],
@@ -165,9 +166,8 @@ export const PIPE = {
 // of blocking rocks so a first drive is accessible.
 export const START = { x: 2, z: 24 };
 
-// Near the pipe the bed is filled up to its invert where the lake floor is lower,
-// and sediment may bury it up to ~60 % of its diameter where the floor is higher.
-// In front of the mouth the floor is levelled (approach apron).
+// Along the pipe the bed is levelled to its laying profile (also the floor inside the bore);
+// in front of the mouth the floor is levelled too (approach apron).
 export function heightAt(x, z) {
   const h = baseHeight(x, z);
   const t = ((x - PM.x) * P_AX + (z - PM.z) * P_AZ) / (P_LEN * P_LEN);
@@ -176,9 +176,8 @@ export function heightAt(x, z) {
   const dist = Math.hypot(x - (PM.x + P_AX * tc), z - (PM.z + P_AZ * tc));
   const bed = bedAt(tc);
   const apron = smooth(-APRON / P_LEN, -2 / P_LEN, tc);   // 0 on the apron, 1 along the pipe
-  const burial = apron * smooth(14 / P_LEN, 30 / P_LEN, tc);   // keep the first sections clear of sediment
-  const target = bed + burial * Math.min(Math.max(h - bed, 0), 1.1);
-  const half = 3 + 2 * (1 - apron);
+  const target = bed;
+  const half = 3.5 + 2 * (1 - apron);
   const m = (1 - smooth(half, half * 2.8, dist)) * smooth(-(APRON + 10) / P_LEN, -APRON / P_LEN, t);
   return h + (target - h) * m;
 }
