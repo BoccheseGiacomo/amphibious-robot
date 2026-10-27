@@ -103,33 +103,58 @@ function baseHeight(x, z) {
 }
 
 // --- Submerged pipe -----------------------------------------------------------
-// Straight intake pipe lying on the lake bed; its open mouth faces the shore.
+// Intake pipe, straight in plan, laid in 12 m sections that follow a smoothed bed
+// profile and are joined by flanges. Its open mouth faces the shore.
 const PM = { x: 8, z: -118 };       // mouth (plan position)
 const PE = { x: -60, z: -430 };     // far end
 const P_AX = PE.x - PM.x, P_AZ = PE.z - PM.z;
 const P_LEN = Math.hypot(P_AX, P_AZ);
-const BED_M = baseHeight(PM.x, PM.z);
-const BED_E = baseHeight(PE.x, PE.z);
-const APRON = 14;                    // flattened area in front of the mouth (m)
+const NSEC = Math.round(P_LEN / 12);
+const APRON = 14;                    // levelled area in front of the mouth (m)
+
+const BED = (() => {
+  let b = [];
+  for (let i = 0; i <= NSEC; i++) b.push(baseHeight(PM.x + P_AX * i / NSEC, PM.z + P_AZ * i / NSEC));
+  for (let pass = 0; pass < 6; pass++) {
+    b = b.map((v, i) => (i === 0 || i === NSEC ? v : 0.25 * b[i - 1] + 0.5 * v + 0.25 * b[i + 1]));
+  }
+  return b;
+})();
+
+function bedAt(t) {
+  const u = Math.min(1, Math.max(0, t)) * NSEC;
+  const i = Math.min(NSEC - 1, Math.floor(u));
+  return BED[i] + (BED[i + 1] - BED[i]) * (u - i);
+}
+
+const RADIUS = 0.9, EMBED = 0.25;
+const JOINTS = BED.map((b, i) => new THREE.Vector3(PM.x + P_AX * i / NSEC, b + RADIUS - EMBED, PM.z + P_AZ * i / NSEC));
 
 export const PIPE = {
-  radius: 0.9,
+  radius: RADIUS,
   wall: 0.07,
-  embed: 0.25,
-  mouth: new THREE.Vector3(PM.x, BED_M + 0.9 - 0.25, PM.z),
-  end: new THREE.Vector3(PE.x, BED_E + 0.9 - 0.25, PE.z),
+  embed: EMBED,
+  joints: JOINTS,                                   // section ends, from the mouth outwards
+  mouth: JOINTS[0],
+  end: JOINTS[NSEC],
+  dir: new THREE.Vector3().subVectors(JOINTS[1], JOINTS[0]).normalize(),   // into the pipe at the mouth
 };
 
+// Near the pipe the bed is filled up to its invert where the lake floor is lower,
+// and sediment may bury it up to ~60 % of its diameter where the floor is higher.
+// In front of the mouth the floor is levelled (approach apron).
 export function heightAt(x, z) {
   const h = baseHeight(x, z);
   const t = ((x - PM.x) * P_AX + (z - PM.z) * P_AZ) / (P_LEN * P_LEN);
   if (t < -APRON / P_LEN - 0.08 || t > 1.05) return h;
   const tc = Math.min(1, Math.max(-APRON / P_LEN, t));
   const dist = Math.hypot(x - (PM.x + P_AX * tc), z - (PM.z + P_AZ * tc));
-  const bed = BED_M + (BED_E - BED_M) * Math.max(tc, 0);
-  const half = tc < 0 ? 4.5 : 2.6;
-  const m = 1 - smooth(half, half * 2.6, dist);
-  return h + (bed - h) * m;
+  const bed = bedAt(tc);
+  const apron = smooth(-APRON / P_LEN, -2 / P_LEN, tc);   // 0 on the apron, 1 along the pipe
+  const target = bed + apron * Math.min(Math.max(h - bed, 0), 1.1);
+  const half = 3 + 2 * (1 - apron);
+  const m = 1 - smooth(half, half * 2.8, dist);
+  return h + (target - h) * m;
 }
 
 export function normalAt(x, z, out = new THREE.Vector3()) {

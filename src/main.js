@@ -55,17 +55,19 @@ function build() {
 
 const { sky, pipeline } = build();
 optics.uPipeMouth.value.copy(PIPE.mouth);
-optics.uPipeDir.value.subVectors(PIPE.end, PIPE.mouth).normalize();
+optics.uPipeDir.value.copy(PIPE.dir);
 optics.uPipeR.value = PIPE.radius - PIPE.wall;
 
 const controls = new FlyControls(camera, canvas, heightAt);
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
-const mouthFront = PIPE.mouth.clone().add(PIPE.mouth.clone().sub(PIPE.end).setY(0).normalize().multiplyScalar(6.5));
+// Oblique view of the mouth from the front-right, slightly above.
+const pipeSide = new THREE.Vector3(-PIPE.dir.z, 0, PIPE.dir.x).normalize();
+const pipeView = PIPE.mouth.clone().addScaledVector(PIPE.dir, -4.5).addScaledVector(pipeSide, -4.0).add(new THREE.Vector3(0, 1.6, 0));
 const VIEWS = [
   { name: 'Riva', pos: V(3, heightAt(3, 46) + 1.7, 46), target: V(14, 0, -80) },
   { name: 'Bassofondo', pos: V(-3, -2.2, -12), target: V(2, -7, -60) },
   { name: 'Scarpata', pos: V(3, heightAt(3, -86) + 1.6, -86), target: V(6, heightAt(6, -104) + 0.5, -104) },
-  { name: 'Condotta', pos: mouthFront.setY(PIPE.mouth.y + 0.4), target: PIPE.mouth.clone() },
+  { name: 'Condotta', pos: pipeView, target: PIPE.mouth.clone().addScaledVector(PIPE.dir, 2.5) },
   { name: 'Panoramica', pos: V(160, 70, 120), target: V(0, -5, -160) },
 ];
 function goto(i) { controls.setPose(VIEWS[i].pos, VIEWS[i].target); }

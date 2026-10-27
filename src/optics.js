@@ -12,9 +12,9 @@ export const optics = {
   uSunDir: { value: new THREE.Vector3(0, 1, 0) },      // towards the sun, in air
   uSunDirW: { value: new THREE.Vector3(0, 1, 0) },     // towards the sun, refracted into water
   uSunColor: { value: new THREE.Vector3(4, 4, 4) },
-  uWaterExt: { value: new THREE.Vector3(0.46, 0.16, 0.20) },
-  uWaterKd: { value: new THREE.Vector3(0.30, 0.07, 0.09) },
-  uWaterScatter: { value: new THREE.Vector3(0.012, 0.052, 0.058) },
+  uWaterExt: { value: new THREE.Vector3(0.40, 0.10, 0.13) },
+  uWaterKd: { value: new THREE.Vector3(0.27, 0.06, 0.075) },
+  uWaterScatter: { value: new THREE.Vector3(0.010, 0.045, 0.050) },
   uHazeColor: { value: new THREE.Vector3(0.50, 0.60, 0.76) },
   uHazeDensity: { value: 0.0001 },
   uHazeFalloff: { value: 0.0011 },
@@ -242,7 +242,7 @@ void terrainSurface(vec3 p, vec3 n, inout vec3 col, inout vec3 bump, inout float
   float bumpK = 1.0;
 
   // Fine sediment in deeper water.
-  vec3 silt = mix(vec3(0.15, 0.145, 0.11), vec3(0.23, 0.21, 0.16), mid) * (0.85 + 0.3 * n_vnoise(p.xz * 3.1));
+  vec3 silt = mix(vec3(0.13, 0.125, 0.095), vec3(0.19, 0.175, 0.135), mid) * (0.85 + 0.3 * n_vnoise(p.xz * 3.1));
   float siltAmt = smoothstep(2.0, 11.0, depth + (big - 0.5) * 9.0) * 0.92;
   col = mix(gravel, silt, siltAmt);
   bumpK *= 1.0 - siltAmt * 0.85;
@@ -258,7 +258,8 @@ void terrainSurface(vec3 p, vec3 n, inout vec3 col, inout vec3 bump, inout float
   if (depth <= 0.0) col *= mix(1.0, 0.58, wet);
 
   // Meadow, forest, rock and snow on land.
-  float grass = smoothstep(1.0, 2.4, p.y + (mid - 0.5) * 1.6) * (1.0 - smoothstep(0.32, 0.5, slope));
+  float beachTop = mix(1.7, 0.45, smoothstep(150.0, 450.0, length(p.xz - vec2(0.0, -40.0))));
+  float grass = smoothstep(beachTop - 0.7, beachTop + 0.7, p.y + (mid - 0.5) * 1.6) * (1.0 - smoothstep(0.32, 0.5, slope));
   vec3 grassCol = mix(vec3(0.05, 0.085, 0.02), vec3(0.12, 0.15, 0.04), n_fbm2(p.xz * 0.37)) * (0.75 + 0.5 * big);
   col = mix(col, grassCol, grass);
   bumpK *= 1.0 - grass * 0.7;
@@ -306,9 +307,9 @@ void rockSurface(vec3 p, vec3 n, inout vec3 col, inout vec3 bump, inout float ro
 void pipeSurface(vec3 p, vec3 n, inout vec3 col, inout vec3 bump, inout float rough) {
   float a = n_fbm3(p * 0.55);
   float b = n_fbm3(p * 3.7);
-  vec3 steel = vec3(0.30, 0.295, 0.28) * (0.85 + 0.3 * b);
-  vec3 rust = mix(vec3(0.24, 0.10, 0.04), vec3(0.38, 0.19, 0.08), b);
-  float r = smoothstep(0.5, 0.75, a + b * 0.35);
+  vec3 steel = vec3(0.24, 0.235, 0.22) * (0.85 + 0.3 * b);
+  vec3 rust = mix(vec3(0.16, 0.08, 0.04), vec3(0.27, 0.15, 0.07), b);
+  float r = smoothstep(0.6, 0.85, a + b * 0.35);
   col = mix(steel, rust, r);
   rough = mix(0.5, 0.92, r);
   underwaterFouling(p, n, col, 1.0);

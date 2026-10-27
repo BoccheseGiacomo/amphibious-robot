@@ -288,56 +288,49 @@ function createLogs(rand) {
 // --- intake pipe -----------------------------------------------------------------
 function createPipe() {
   const group = new THREE.Group();
-  const { radius: R, wall } = PIPE;
+  const { radius: R, wall, joints } = PIPE;
   const Ri = R - wall;
-  const axis = new THREE.Vector3().subVectors(PIPE.mouth, PIPE.end);  // end -> mouth
-  const L = axis.length();
-  axis.normalize();
-  const orient = new THREE.Quaternion().setFromUnitVectors(UP, axis);
-
-  const steel = patchMaterial(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, metalness: 0.25 }), 'pipe');
+  const steel = patchMaterial(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, metalness: 0.2 }), 'pipe');
   const concrete = patchMaterial(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95 }), 'concrete');
+  const orientAlong = (axis) => new THREE.Quaternion().setFromUnitVectors(UP, axis);
+  const add = (mesh) => { mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh); return mesh; };
 
-  // Tube wall with a bevelled lip at the mouth (lathe profile along local +y).
+  // Sections: lathe profiles along local +y, from the far joint towards the mouth.
+  // The first section carries a bevelled lip; the others overlap slightly under the flanges.
   const b = 0.015;
-  const prof = [
-    [R, 0], [R, L - b], [R - b, L], [Ri + b, L], [Ri, L - b], [Ri, 0],
-  ].map(([r, y]) => new THREE.Vector2(r, y));
-  const tube = new THREE.Mesh(new THREE.LatheGeometry(prof, 72), steel);
-  tube.quaternion.copy(orient);
-  tube.position.copy(PIPE.end);
-  tube.castShadow = true;
-  tube.receiveShadow = true;
-  group.add(tube);
+  for (let i = 0; i < joints.length - 1; i++) {
+    const axis = new THREE.Vector3().subVectors(joints[i], joints[i + 1]);
+    const L = axis.length() + (i === 0 ? 0 : 0.05);
+    axis.normalize();
+    const prof = i === 0
+      ? [[R, 0], [R, L - b], [R - b, L], [Ri + b, L], [Ri, L - b], [Ri, 0]]
+      : [[R, 0], [R, L], [Ri, L], [Ri, 0]];
+    const tube = add(new THREE.Mesh(new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 64), steel));
+    tube.quaternion.copy(orientAlong(axis));
+    tube.position.copy(joints[i + 1]);
+  }
 
-  // Bolted flanges every 6 m.
+  // Flanges at the mouth and at every joint.
   const fr = R + 0.07;
   const flangeGeo = new THREE.LatheGeometry([
     [R - 0.005, -0.13], [fr, -0.11], [fr, 0.11], [R - 0.005, 0.13],
-  ].map(([r, y]) => new THREE.Vector2(r, y)), 72);
-  const flangeCount = Math.floor((L - 1) / 6);
-  const flanges = new THREE.InstancedMesh(flangeGeo, steel, flangeCount);
-  for (let i = 0; i < flangeCount; i++) {
-    _p.copy(PIPE.mouth).addScaledVector(axis, -(0.6 + i * 6));
-    flanges.setMatrixAt(i, _m.compose(_p, orient, _s.set(1, 1, 1)));
+  ].map(([r, y]) => new THREE.Vector2(r, y)), 64);
+  const flanges = add(new THREE.InstancedMesh(flangeGeo, steel, joints.length - 1));
+  flanges.setMatrixAt(0, _m.compose(_p.copy(joints[0]).addScaledVector(PIPE.dir, 0.3), orientAlong(PIPE.dir), _s.set(1, 1, 1)));
+  for (let i = 1; i < joints.length - 1; i++) {
+    const axis = new THREE.Vector3().subVectors(joints[i + 1], joints[i - 1]).normalize();
+    flanges.setMatrixAt(i, _m.compose(joints[i], orientAlong(axis), _s.set(1, 1, 1)));
   }
-  flanges.castShadow = true;
-  flanges.receiveShadow = true;
-  group.add(flanges);
 
-  // Concrete saddles every 12 m, partly buried.
-  const yaw = Math.atan2(axis.x, axis.z);
-  const saddleQ = new THREE.Quaternion().setFromEuler(_e.set(0, yaw, 0));
-  const saddleCount = Math.floor((L - 4) / 12);
-  const saddles = new THREE.InstancedMesh(new THREE.BoxGeometry(2.5, 0.9, 0.7), concrete, saddleCount);
-  for (let i = 0; i < saddleCount; i++) {
-    _p.copy(PIPE.mouth).addScaledVector(axis, -(4 + i * 12));
+  // Concrete saddles at mid-section, partly buried.
+  const saddles = add(new THREE.InstancedMesh(new THREE.BoxGeometry(2.5, 0.9, 0.7), concrete, joints.length - 1));
+  for (let i = 0; i < joints.length - 1; i++) {
+    const axis = new THREE.Vector3().subVectors(joints[i + 1], joints[i]);
+    const q = new THREE.Quaternion().setFromEuler(_e.set(0, Math.atan2(axis.x, axis.z), 0));
+    _p.copy(joints[i]).lerp(joints[i + 1], i === 0 ? 0.6 : 0.5);
     _p.y -= R * 0.72;
-    saddles.setMatrixAt(i, _m.compose(_p, saddleQ, _s.set(1, 1, 1)));
+    saddles.setMatrixAt(i, _m.compose(_p, q, _s.set(1, 1, 1)));
   }
-  saddles.castShadow = true;
-  saddles.receiveShadow = true;
-  group.add(saddles);
 
   // Headwall around the pipe, 1.6 m behind the mouth.
   const shape = new THREE.Shape();
@@ -347,12 +340,9 @@ function createPipe() {
   hole.absarc(0, 0, R + 0.03, 0, Math.PI * 2, true);
   shape.holes.push(hole);
   const wallGeo = new THREE.ExtrudeGeometry(shape, { depth: 1.0, bevelEnabled: true, bevelSize: 0.04, bevelThickness: 0.04, bevelSegments: 2, curveSegments: 48 });
-  const headwall = new THREE.Mesh(wallGeo, concrete);
-  headwall.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), axis.clone().negate());
-  headwall.position.copy(PIPE.mouth).addScaledVector(axis, -1.6);
-  headwall.castShadow = true;
-  headwall.receiveShadow = true;
-  group.add(headwall);
+  const headwall = add(new THREE.Mesh(wallGeo, concrete));
+  headwall.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), PIPE.dir);
+  headwall.position.copy(PIPE.mouth).addScaledVector(PIPE.dir, 1.6);
 
   return group;
 }

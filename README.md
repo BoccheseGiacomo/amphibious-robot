@@ -45,10 +45,10 @@ Definiti in `src/optics.js`; coerenti con un lago moderatamente torbido verde-az
 
 | Grandezza | R | G | B |
 | --- | --- | --- | --- |
-| Estinzione del fascio `c` | 0.50 | 0.17 | 0.24 |
-| Attenuazione diffusa con la profondità `Kd` | 0.32 | 0.075 | 0.11 |
+| Estinzione del fascio `c` | 0.40 | 0.10 | 0.13 |
+| Attenuazione diffusa con la profondità `Kd` | 0.27 | 0.06 | 0.075 |
 
-Il rosso si spegne nei primi metri; a 19 m (quota della condotta) arriva circa il 24 % del verde e il 12 % del blu della luce superficiale.
+Il rosso si spegne nei primi metri; a 19 m (quota della condotta) arriva circa il 32 % del verde e il 24 % del blu della luce superficiale. In orizzontale il contrasto si riduce a 1/e ogni 10 m circa (verde).
 
 ## Pubblicazione
 
