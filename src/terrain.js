@@ -111,7 +111,7 @@ function baseHeight(x, z) {
   if (s < 0) {
     const d = -s;
     // Beach shelf, littoral slope, drop-off to a ~10 m plateau, then the ~20 m basin.
-    let h = -(2 * (1 - Math.exp(-d / 8)) + 3.5 * smooth(8, 24, d) + 4.5 * smooth(22, 42, d) + 9 * smooth(60, 115, d));
+    let h = -(2 * (1 - Math.exp(-d / 8)) + 3.5 * smooth(6, 26, d) + 4.5 * smooth(27, 49, d) + 9 * smooth(66, 120, d));
     h += fbm(x * 0.05, z * 0.05, 4) * 0.7 * smooth(4, 20, d);
     h += fbm(x * 0.2, z * 0.2, 2) * 0.12 * smooth(1, 6, d);
     return h;
@@ -126,7 +126,7 @@ function baseHeight(x, z) {
 // --- Submerged pipe -----------------------------------------------------------
 // Intake pipe, straight in plan, laid in 12 m sections that follow a smoothed bed
 // profile and are joined by flanges. Its open mouth faces the shore.
-const PM = { x: 5, z: -28 };        // mouth (plan position)
+const PM = { x: 5, z: -41 };        // mouth (plan position)
 const PE = { x: -20, z: -150 };     // far end, near the deepest part of the lake
 const P_AX = PE.x - PM.x, P_AZ = PE.z - PM.z;
 const P_LEN = Math.hypot(P_AX, P_AZ);
@@ -176,9 +176,10 @@ export function heightAt(x, z) {
   const dist = Math.hypot(x - (PM.x + P_AX * tc), z - (PM.z + P_AZ * tc));
   const bed = bedAt(tc);
   const apron = smooth(-APRON / P_LEN, -2 / P_LEN, tc);   // 0 on the apron, 1 along the pipe
-  const target = bed + apron * Math.min(Math.max(h - bed, 0), 1.1);
+  const burial = apron * smooth(14 / P_LEN, 30 / P_LEN, tc);   // keep the first sections clear of sediment
+  const target = bed + burial * Math.min(Math.max(h - bed, 0), 1.1);
   const half = 3 + 2 * (1 - apron);
-  const m = 1 - smooth(half, half * 2.8, dist);
+  const m = (1 - smooth(half, half * 2.8, dist)) * smooth(-(APRON + 10) / P_LEN, -APRON / P_LEN, t);
   return h + (target - h) * m;
 }
 

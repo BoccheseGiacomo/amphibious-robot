@@ -29,6 +29,12 @@ const SHOTS = /* js */ `
   const DT = 1 / ${FPS};
   // Rover state after driving straight from the beach for a given time (physics only).
   const drive = (seconds) => { R.reset(L.START.x, L.START.z, startYaw); for (let i = 0; i < seconds * 120; i++) R.update(1 / 120, 1, 0); };
+  // Time at which the rover, driving straight, comes to rest in front of the pipe mouth.
+  const stopTime = (() => {
+    R.reset(L.START.x, L.START.z, startYaw);
+    for (let i = 0; i < 120 * 120; i++) { R.update(1 / 120, 1, 0); if (i > 1200 && Math.abs(R.speed) < 0.05) return i / 120; }
+    return 120;
+  })();
   const axes = () => {
     const s = Math.sin(R.yaw), c = Math.cos(R.yaw);
     return { f: V(-s, 0, -c), r: V(c, 0, -s) };
@@ -43,8 +49,8 @@ const SHOTS = /* js */ `
       setup() { drive(0); R.lightsOn = false; setFov(50); },
       frame(t) {
         const u = ease(t / 8);
-        cam.position.copy(V(170, 85, 150).lerp(V(55, 20, 62), u));
-        cam.lookAt(V(-30, -10, -220).lerp(V(2, 0, 5), u));
+        cam.position.copy(V(110, 55, 95).lerp(V(30, 9, 36), u));
+        cam.lookAt(V(-20, -20, -160).lerp(V(2, 0, -5), u));
       },
     },
     entry: {
@@ -64,31 +70,31 @@ const SHOTS = /* js */ `
     },
     descent: {
       dur: 10,
-      setup() { drive(58); R.lightsOn = true; setFov(55); },
+      setup() { drive(17); R.lightsOn = true; setFov(55); },
       frame(t) {
         R.update(DT, 1, 0);
         const { f, r } = axes();
-        const a = 0.5 + 0.8 * ease(t / 10);
-        const off = f.clone().multiplyScalar(-Math.cos(a)).addScaledVector(r, -Math.sin(a)).multiplyScalar(3.8);
-        cam.position.copy(R.position).add(off).addScaledVector(UP, 1.1);
-        keepAbove(cam.position);
-        cam.lookAt(R.position.clone().addScaledVector(f, 1.0).addScaledVector(UP, 0.3));
+        const a = 0.6 + 0.7 * ease(t / 10);
+        const off = f.clone().multiplyScalar(-Math.cos(a)).addScaledVector(r, Math.sin(a)).multiplyScalar(4.5);
+        cam.position.copy(R.position).add(off).addScaledVector(UP, 2.0);
+        keepAbove(cam.position, 1.6);
+        cam.lookAt(R.position.clone().addScaledVector(f, 1.5).addScaledVector(UP, 0.2));
       },
     },
     arrival: {
       dur: 12,
-      setup() { drive(113.5); R.lightsOn = true; setFov(55); },
+      setup() { drive(stopTime - 11.5); R.lightsOn = true; setFov(55); },
       frame(t) {
         R.update(DT, 1, 0);
-        const base = P.mouth.clone().addScaledVector(P.dir, -4.5).addScaledVector(pipeSide, 4.5).addScaledVector(UP, 1.3);
-        cam.position.copy(base).addScaledVector(pipeSide, -0.8 * ease(t / 12));
-        keepAbove(cam.position);
-        cam.lookAt(R.position.clone().lerp(P.mouth, 0.4).addScaledVector(UP, 0.3));
+        const base = P.mouth.clone().addScaledVector(P.dir, -9.5).addScaledVector(pipeSide, 3.6).addScaledVector(UP, 1.6);
+        cam.position.copy(base).addScaledVector(P.dir, 2.0 * ease(t / 12));
+        keepAbove(cam.position, 1.2);
+        cam.lookAt(P.mouth.clone().addScaledVector(P.dir, -3.0).addScaledVector(UP, 0.1));
       },
     },
     onboard: {
       dur: 7,
-      setup() { drive(132); R.lightsOn = true; setFov(70); },
+      setup() { drive(stopTime + 1); R.lightsOn = true; setFov(70); },
       frame(t) {
         const u = ease(t / 7);
         R.panAngle = 0.28 - 0.4 * u;
