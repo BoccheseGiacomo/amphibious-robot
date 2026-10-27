@@ -23,6 +23,11 @@ export const optics = {
   uPipeMouth: { value: new THREE.Vector3() },
   uPipeDir: { value: new THREE.Vector3(0, 0, -1) },   // from the mouth into the pipe
   uPipeR: { value: 0.83 },
+  // Rover floodlights: positions, beam axes, radiant intensity (0 when off), cone cosines (outer, inner).
+  uLampPos: { value: [new THREE.Vector3(), new THREE.Vector3()] },
+  uLampDir: { value: [new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0, -1)] },
+  uLampColor: { value: new THREE.Vector3() },
+  uLampCone: { value: new THREE.Vector2(Math.cos(0.55), Math.cos(0.25)) },
 };
 
 export function setSun(dirToSun, color) {
@@ -94,6 +99,40 @@ float pipeInside(vec3 p) {
 float pipeAmbient(vec3 p) {
   float s = pipeInside(p);
   return s > 0.0 ? 0.06 + 0.94 * exp(-s / 0.9) : 1.0;
+}
+
+uniform vec3 uLampPos[2];
+uniform vec3 uLampDir[2];
+uniform vec3 uLampColor;
+uniform vec2 uLampCone;
+
+// Transmittance of the water part of the straight segment a -> b.
+vec3 waterTransmit(vec3 a, vec3 b) {
+  float L = length(b - a);
+  float under;
+  if (a.y < 0.0 && b.y < 0.0) under = L;
+  else if (a.y >= 0.0 && b.y >= 0.0) under = 0.0;
+  else { float t = a.y / (a.y - b.y); under = a.y < 0.0 ? t * L : (1.0 - t) * L; }
+  return exp(-uWaterExt * under);
+}
+
+// Radiance emitted by lamp i towards point p (inverse square, soft cone, water absorption).
+vec3 lampRadiance(int i, vec3 p, out vec3 toLamp) {
+  vec3 L = uLampPos[i] - p;
+  float d2 = dot(L, L);
+  toLamp = L * inversesqrt(d2);
+  float cone = smoothstep(uLampCone.x, uLampCone.y, dot(-toLamp, uLampDir[i]));
+  return uLampColor * cone * waterTransmit(uLampPos[i], p) / (d2 + 0.02);
+}
+
+// Irradiance from both lamps on a surface with normal n.
+vec3 lampIrradiance(vec3 p, vec3 n) {
+  vec3 e = vec3(0.0), l;
+  for (int i = 0; i < 2; i++) {
+    vec3 r = lampRadiance(i, p, l);
+    e += r * max(dot(n, l), 0.0);
+  }
+  return e;
 }
 
 // Tileable caustic network (period 1 in uv).
@@ -412,6 +451,11 @@ export function patchMaterial(material, kind) {
           float amb = pipeAmbient(vWPos);
           reflectedLight.indirectDiffuse *= att * amb;
           reflectedLight.indirectSpecular *= att * amb * mix(1.0, 0.3, smoothstep(0.0, 0.5, zD));
+        }
+        // Rover lamps travel only through water/air, not from the surface down: added after.
+        if (uLampColor.g > 0.0) {
+          vec3 nWorld = inverseTransformDirection(normal, viewMatrix);
+          reflectedLight.directDiffuse += lampIrradiance(vWPos, nWorld) * BRDF_Lambert(material.diffuseColor);
         }`)
       .replace('#include <fog_fragment>', 'gl_FragColor.rgb = opticsOpaque(gl_FragColor.rgb, vWPos);');
   };

@@ -1,6 +1,6 @@
 // Scene dressing: rocks, conifers, aquatic weeds, sunken logs and the intake pipe.
 import * as THREE from 'three';
-import { heightAt, normalAt, shoreDistance, mulberry32, PIPE } from './terrain.js';
+import { heightAt, normalAt, shoreDistance, mulberry32, PIPE, START } from './terrain.js';
 import { patchMaterial } from './optics.js';
 
 // --- helpers -------------------------------------------------------------------
@@ -58,6 +58,11 @@ const _e = new THREE.Euler();
 const _n = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 
+// Plan-view collision shapes for the rover, filled while props are built.
+// capsule: segment a-b with radius r (a circle when a = b); box: centre, unit axis, half extents.
+const obstacles = [];
+const capsule = (ax, az, bx, bz, r) => obstacles.push({ type: 'capsule', ax, az, bx, bz, r });
+
 // --- rocks ---------------------------------------------------------------------
 function makeRockGeometry(seed) {
   const r = mulberry32(seed);
@@ -86,6 +91,7 @@ function createRocks(rand) {
 
   const place = (x, z, scale) => {
     if (pipeClearance(x, z) < 3.5 + scale) return;
+    if (scale > 0.35 && routeClearance(x, z) < 2.5 + scale) return;
     const y = heightAt(x, z);
     normalAt(x, z, _n);
     _q.setFromUnitVectors(UP, _n.lerp(UP, 0.4).normalize());
@@ -93,6 +99,8 @@ function createRocks(rand) {
     _s.set(scale * (0.8 + rand() * 0.4), scale * (0.7 + rand() * 0.5), scale * (0.8 + rand() * 0.4));
     _p.set(x, y - 0.12 * scale, z);
     placements[Math.floor(rand() * variants)].push(new THREE.Matrix4().compose(_p.clone(), _q.clone(), _s.clone()));
+    // Rocks standing higher than ~25 cm block the tracks; smaller ones are driven over.
+    if (_s.y * 0.55 > 0.25) capsule(x, z, x, z, 0.8 * Math.max(_s.x, _s.z));
   };
 
   // Lake bed around the route, denser on the steep drop-off.
@@ -130,6 +138,13 @@ function createRocks(rand) {
     group.add(mesh);
   });
   return group;
+}
+
+// Horizontal distance from (x, z) to the straight route between the start and the pipe mouth.
+function routeClearance(x, z) {
+  const ax = PIPE.mouth.x - START.x, az = PIPE.mouth.z - START.z;
+  const t = Math.min(1, Math.max(0, ((x - START.x) * ax + (z - START.z) * az) / (ax * ax + az * az)));
+  return Math.hypot(x - (START.x + ax * t), z - (START.z + az * t));
 }
 
 // Horizontal distance from (x, z) to the pipe axis, including the apron in front of the mouth.
@@ -278,6 +293,10 @@ function createLogs(rand) {
     const y = heightAt(x, z);
     mesh.position.set(x, y + r * 0.6, z);
     mesh.rotation.set((rand() - 0.5) * 0.1, rand() * Math.PI, Math.PI / 2, 'YXZ');
+    mesh.updateMatrixWorld();
+    const a = new THREE.Vector3(0, -len / 2, 0).applyMatrix4(mesh.matrixWorld);
+    const b = new THREE.Vector3(0, len / 2, 0).applyMatrix4(mesh.matrixWorld);
+    capsule(a.x, a.z, b.x, b.z, r);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     group.add(mesh);
@@ -344,12 +363,19 @@ function createPipe() {
   headwall.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, -1), PIPE.dir);
   headwall.position.copy(PIPE.mouth).addScaledVector(PIPE.dir, 1.6);
 
+  const fl = R + 0.07;
+  for (let i = 0; i < joints.length - 1; i++) capsule(joints[i].x, joints[i].z, joints[i + 1].x, joints[i + 1].z, fl);
+  const axis = new THREE.Vector2(PIPE.dir.x, PIPE.dir.z).normalize();
+  const c = PIPE.mouth.clone().addScaledVector(PIPE.dir, 1.1);   // headwall spans 0.6–1.6 m behind the mouth
+  obstacles.push({ type: 'box', cx: c.x, cz: c.z, ux: axis.x, uz: axis.y, hl: 0.54, hw: 2.64 });
+
   return group;
 }
 
 export function createProps() {
   const rand = mulberry32(2026);
   const group = new THREE.Group();
+  obstacles.length = 0;
   group.add(createRocks(rand), createTrees(rand), createWeeds(rand), createLogs(rand), createPipe());
-  return group;
+  return { group, obstacles };
 }

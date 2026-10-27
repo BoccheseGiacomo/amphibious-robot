@@ -11,9 +11,22 @@
     canvas { display: block; width: 100vw; height: 100vh; cursor: grab; }
     canvas:active { cursor: grabbing; }
     .panel { position: fixed; background: var(--panel); backdrop-filter: blur(8px); border-radius: 8px; padding: 10px 14px; }
-    #status { top: 16px; left: 16px; display: flex; gap: 14px; align-items: baseline; }
-    #depth { font-size: 15px; font-variant-numeric: tabular-nums; }
-    #fps { color: var(--muted); font-variant-numeric: tabular-nums; }
+    #status { top: 16px; left: 16px; min-width: 210px; }
+    #status header { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 6px; font-weight: 600; }
+    #fps { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+    #status dl { display: grid; grid-template-columns: auto auto; gap: 2px 16px; margin: 0; }
+    #status dt { color: var(--muted); }
+    #status dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+    #reticle { position: fixed; inset: 7vh 7vw; pointer-events: none; display: none;
+      border: 1px solid rgba(255, 255, 255, 0.0);
+      background:
+        linear-gradient(#fff8, #fff8) top left / 28px 1px no-repeat, linear-gradient(#fff8, #fff8) top left / 1px 28px no-repeat,
+        linear-gradient(#fff8, #fff8) top right / 28px 1px no-repeat, linear-gradient(#fff8, #fff8) top right / 1px 28px no-repeat,
+        linear-gradient(#fff8, #fff8) bottom left / 28px 1px no-repeat, linear-gradient(#fff8, #fff8) bottom left / 1px 28px no-repeat,
+        linear-gradient(#fff8, #fff8) bottom right / 28px 1px no-repeat, linear-gradient(#fff8, #fff8) bottom right / 1px 28px no-repeat; }
+    #reticle::after { content: ""; position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px;
+      border: 1px solid #fff6; border-radius: 50%; }
+    body.onboard #reticle { display: block; }
     #help { bottom: 16px; left: 16px; color: var(--muted); }
     #help b { color: var(--fg); font-weight: 600; }
     #loading { inset: 0; display: grid; place-items: center; background: #0b1214; font-size: 15px; position: fixed; }
@@ -25,10 +38,23 @@
 </head>
 <body>
   <canvas id="view"></canvas>
-  <div id="status" class="panel"><span id="depth"></span><span id="fps"></span></div>
+  <div id="reticle"></div>
+  <div id="status" class="panel">
+    <header><span id="h-view"></span><span id="fps"></span></header>
+    <dl>
+      <dt>Profondità</dt><dd id="h-depth"></dd>
+      <dt>Velocità</dt><dd id="h-speed"></dd>
+      <dt>Rotta</dt><dd id="h-heading"></dd>
+      <dt>Beccheggio</dt><dd id="h-pitch"></dd>
+      <dt>Rollio</dt><dd id="h-roll"></dd>
+      <dt>Imbocco condotta</dt><dd id="h-pipe"></dd>
+      <dt>Luci</dt><dd id="h-lights"></dd>
+    </dl>
+  </div>
   <div id="help" class="panel">
-    <b>Trascina</b> guarda · <b>W A S D</b> muovi · <b>E / Q</b> su / giù · <b>Shift</b> veloce · <b>Frecce</b> ruota ·
-    <b>1–5</b> viste (riva, bassofondo, scarpata, condotta, panoramica) · <b>H</b> nascondi
+    <b>W / S</b> avanti / indietro · <b>A / D</b> sterza · <b>L</b> luci · <b>V</b> vista esterna / bordo ·
+    <b>Trascina</b> orbita o punta la telecamera · <b>Rotella</b> distanza · <b>R</b> riporta a riva ·
+    <b>F</b> camera libera (W A S D, E / Q) · <b>1–5</b> punti di vista · <b>H</b> nascondi
   </div>
   <div id="loading">Generazione del lago…</div>
   <script type="module" src="./src/main.js"></script>

@@ -80,7 +80,28 @@ export class Pipeline {
         float mu = dot(wdir, uSunDirW);
         float g = 0.82;
         float phase = (1.0 - g * g) / pow(1.0 + g * g - 2.0 * g * mu, 1.5) / 12.566;
-        gl_FragColor = vec4(acc * uSunColor * uWaterExt * vec3(0.25, 0.9, 0.8) * phase * 0.08, 1.0);
+        vec3 col = acc * uSunColor * uWaterExt * vec3(0.25, 0.9, 0.8) * phase * 0.08;
+
+        // Back-scatter of the rover lamps (the glow that limits what lights can reveal).
+        if (uLampColor.g > 0.0) {
+          float tl = min(tMax, 16.0);
+          const int M = 24;
+          float dl = tl / float(M);
+          vec3 lacc = vec3(0.0), l;
+          for (int i = 0; i < M; i++) {
+            float t = (float(i) + jit) * dl;
+            vec3 x = uEye + wdir * t;
+            if (x.y > 0.0) break;
+            for (int k = 0; k < 2; k++) {
+              vec3 r = lampRadiance(k, x, l);
+              float cosS = dot(wdir, -l);
+              float ph = 0.08 + 0.5 * pow(max(cosS, 0.0), 6.0);
+              lacc += r * ph * exp(-uWaterExt * t) * dl;
+            }
+          }
+          col += lacc * vec3(0.016, 0.02, 0.02);   // scattering coefficient (absorption excluded)
+        }
+        gl_FragColor = vec4(col, 1.0);
       }`, {
       ...optics,
       tDepth: { value: null },

@@ -140,6 +140,10 @@ export const PIPE = {
   dir: new THREE.Vector3().subVectors(JOINTS[1], JOINTS[0]).normalize(),   // into the pipe at the mouth
 };
 
+// Rover start on the beach. The straight route from here to the mouth is kept free
+// of blocking rocks so a first drive is accessible.
+export const START = { x: 2, z: 40 };
+
 // Near the pipe the bed is filled up to its invert where the lake floor is lower,
 // and sediment may bury it up to ~60 % of its diameter where the floor is higher.
 // In front of the mouth the floor is levelled (approach apron).
