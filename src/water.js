@@ -11,7 +11,51 @@ uniform vec2 uRes;
 float viewDistZ(float d) { return exp2(d * log2(uFar + 1.0)) - 1.0; }
 `;
 
-export function createWaterSurface(skyCube) {
+// Tileable ripple slope map: random sum of plane waves with integer wave numbers, so the
+// tile repeats seamlessly. Stored as slopes (RG) with mipmaps and anisotropic filtering:
+// the GPU averages ripples smaller than a pixel, which keeps distant water stable.
+function createRippleTexture(renderer, size = 256) {
+  const rand = (() => { let s = 7; return () => ((s = (s * 16807) % 2147483647) / 2147483647); })();
+  const waves = [];
+  for (let i = 0; i < 160; i++) {
+    const k = 2 + Math.floor(Math.pow(rand(), 1.6) * 46);
+    const ang = 0.6 + (rand() - 0.5) * 2.6;                 // around the wind direction
+    const kx = Math.round(k * Math.cos(ang)), ky = Math.round(k * Math.sin(ang));
+    if (!kx && !ky) continue;
+    const kk = Math.hypot(kx, ky);
+    waves.push({ kx, ky, a: 1 / Math.pow(kk, 1.9), ph: rand() * Math.PI * 2 });
+  }
+  const data = new Uint8Array(size * size * 4);
+  const sx = new Float32Array(size * size), sy = new Float32Array(size * size);
+  let maxS = 0;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      let gx = 0, gy = 0;
+      for (const w of waves) {
+        const c = Math.cos(2 * Math.PI * (w.kx * x + w.ky * y) / size + w.ph) * w.a * 2 * Math.PI;
+        gx += c * w.kx; gy += c * w.ky;
+      }
+      const i = y * size + x;
+      sx[i] = gx; sy[i] = gy;
+      maxS = Math.max(maxS, Math.abs(gx), Math.abs(gy));
+    }
+  }
+  for (let i = 0; i < size * size; i++) {
+    data[i * 4] = Math.round((sx[i] / maxS * 0.5 + 0.5) * 255);
+    data[i * 4 + 1] = Math.round((sy[i] / maxS * 0.5 + 0.5) * 255);
+    data[i * 4 + 3] = 255;
+  }
+  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.generateMipmaps = true;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  tex.needsUpdate = true;
+  return tex;
+}
+
+export function createWaterSurface(renderer, skyCube) {
   const material = new THREE.ShaderMaterial({
     uniforms: {
       ...optics,
@@ -19,6 +63,7 @@ export function createWaterSurface(skyCube) {
       tDepth: { value: null },
       tReflect: { value: null },
       tSky: { value: skyCube },
+      tRipple: { value: createRippleTexture(renderer) },
       uReflMatrix: { value: new THREE.Matrix4() },
       uReflOn: { value: 1 },
       uRes: { value: new THREE.Vector2(1, 1) },
@@ -43,26 +88,18 @@ export function createWaterSurface(skyCube) {
       ${NOISE_GLSL}
       ${OPTICS_GLSL}
 
-      // Wind ripples: sum of directional deep-water waves, band-limited by pixel footprint.
-      vec3 waveNormal(vec2 p, float footprint) {
-        vec2 g = vec2(0.0);
-        float wind = 0.6;
-        for (int i = 0; i < 14; i++) {
-          float fi = float(i);
-          float ang = wind + (n_hash12(vec2(fi, 3.7)) - 0.5) * 2.4;
-          vec2 d = vec2(cos(ang), sin(ang));
-          float wl = 0.18 * pow(1.3, fi);
-          float k = 6.2831853 / wl;
-          float w = sqrt(9.81 * k);
-          float a = wl * 0.010;
-          float aa = 1.0 - smoothstep(wl * 0.08, wl * 0.3, footprint);
-          float ph = dot(d, p) * k - w * uTime + fi * 1.7;
-          g += d * (a * k * cos(ph)) * aa;
-        }
-        vec2 q = p * 0.35 + vec2(uTime * 0.05, uTime * 0.03);
-        float e = 0.08;
-        float n0 = n_vnoise(q * 3.0);
-        g += vec2(n_vnoise(q * 3.0 + vec2(e, 0.0)) - n0, n_vnoise(q * 3.0 + vec2(0.0, e)) - n0) / e * 0.06 * (1.0 - smoothstep(0.05, 0.3, footprint));
+      uniform sampler2D tRipple;
+
+      vec2 rot(vec2 p, float a) { float c = cos(a), s = sin(a); return vec2(c * p.x - s * p.y, s * p.x + c * p.y); }
+
+      // Wind ripples: three scrolling layers of the filtered slope map at unrelated scales and
+      // angles, modulated by slow large-scale gusts (calmer and rougher patches on the lake).
+      vec3 waveNormal(vec2 p) {
+        vec2 g = rot((texture2D(tRipple, rot(p, 0.37) / 23.0 + uTime * vec2(0.011, 0.004)).rg - 0.5), -0.37) * 0.36;
+        g += rot((texture2D(tRipple, rot(p, 1.91) / 7.3 + uTime * vec2(-0.017, 0.021)).rg - 0.5), -1.91) * 0.40;
+        g += rot((texture2D(tRipple, rot(p, -0.83) / 2.9 + uTime * vec2(0.043, -0.031)).rg - 0.5), 0.83) * 0.30;
+        float gust = n_vnoise(p * 0.012 + uTime * vec2(0.010, 0.004)) * 0.6 + n_vnoise(p * 0.031 - uTime * 0.006) * 0.4;
+        g *= 0.35 + 1.1 * smoothstep(0.2, 0.8, gust);
         return normalize(vec3(-g.x, 1.0, -g.y));
       }
 
@@ -76,7 +113,7 @@ export function createWaterSurface(skyCube) {
         if (sceneZ < waterZ * (1.0 - 1e-4) - 0.01) discard;
 
         float footprint = length(fwidth(vWPos.xz));
-        vec3 N = waveNormal(vWPos.xz, footprint);
+        vec3 N = waveNormal(vWPos.xz);
         vec3 V = normalize(cameraPosition - vWPos);
         float thick = sceneZ - waterZ;
         vec3 col;
@@ -93,14 +130,18 @@ export function createWaterSurface(skyCube) {
           vec3 refl;
           if (uReflOn > 0.5) {
             vec4 rc = uReflMatrix * vec4(vWPos, 1.0);
-            refl = texture2D(tReflect, rc.xy / rc.w + N.xz * 0.025).rgb;
+            // Ripple displacement of the mirror image shrinks with distance and vanishes at the shoreline.
+            vec2 roff = N.xz * min(0.025, 0.5 / waterZ) * clamp(thick * 0.5, 0.0, 1.0);
+            refl = texture2D(tReflect, rc.xy / rc.w + roff).rgb;
           } else {
             refl = textureCube(tSky, R).rgb;
           }
           float edge = smoothstep(0.0, 0.35, thick);
           col = mix(refr, refl, F * edge);
+          // Sun glint: sharp up close, broader and dimmer where ripples are averaged.
           float sp = max(dot(R, uSunDir), 0.0);
-          col += uSunColor * (pow(sp, 900.0) * 6.0 + pow(sp, 90.0) * 0.08) * edge;
+          float sharp = mix(900.0, 160.0, smoothstep(0.02, 1.5, footprint));
+          col += uSunColor * (pow(sp, sharp) * sharp / 150.0 + pow(sp, 90.0) * 0.08) * edge;
           col = opticsSurface(col, vWPos);
         } else {
           // Seen from below: refraction into air inside Snell's window, total internal reflection outside.

@@ -31,7 +31,7 @@ export class Pipeline {
       ...hdr, samples: 4,
       depthTexture: new THREE.DepthTexture(1, 1, THREE.FloatType),
     });
-    this.reflRT = new THREE.WebGLRenderTarget(1, 1, hdr);
+    this.reflRT = new THREE.WebGLRenderTarget(1, 1, { ...hdr, samples: 4 });
     this.compRT = new THREE.WebGLRenderTarget(1, 1, { ...hdr, depthBuffer: false });
     this.raysRT = new THREE.WebGLRenderTarget(1, 1, { ...hdr, depthBuffer: false });
     this.bloomA = new THREE.WebGLRenderTarget(1, 1, { ...hdr, depthBuffer: false });
@@ -206,7 +206,9 @@ export class Pipeline {
       0.0, 0.0, 0.0, 1.0,
     ).multiply(rc.projectionMatrix).multiply(rc.matrixWorldInverse);
 
-    const plane = this._plane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0));
+    // Clip slightly below the surface: the submerged edge of the shore must stay to block
+    // mirrored rays that would otherwise pass under the land and show sky at the waterline.
+    const plane = this._plane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -0.3, 0));
     plane.applyMatrix4(rc.matrixWorldInverse);
     const clip = this._clip.set(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
     const e = rc.projectionMatrix.elements;
@@ -217,7 +219,7 @@ export class Pipeline {
       (1.0 + e[10]) / e[14],
     );
     clip.multiplyScalar(2.0 / clip.dot(q));
-    e[2] = clip.x; e[6] = clip.y; e[10] = clip.z + 1.0 - 0.003; e[14] = clip.w;
+    e[2] = clip.x; e[6] = clip.y; e[10] = clip.z + 1.0; e[14] = clip.w;
     rc.projectionMatrixInverse.copy(rc.projectionMatrix).invert();
   }
 
@@ -234,7 +236,9 @@ export class Pipeline {
     if (!under) {
       this.updateReflectionCamera(camera);
       r.setRenderTarget(this.reflRT);
+      optics.uDetail.value = 0;
       r.render(this.world, this.reflCam);
+      optics.uDetail.value = 1;
     }
 
     // 2. opaque world. Under water the sky is hidden: the surface covers it, and

@@ -17,7 +17,11 @@ const hud = {
 };
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', logarithmicDepthBuffer: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+// Render scale relative to the display; ?pr=<ratio> fixes it (offline video), otherwise adaptive.
+const fixedPR = Number(new URLSearchParams(location.search).get('pr')) || 0;
+const maxPR = fixedPR || Math.min(window.devicePixelRatio, 1.25);
+let renderScale = 1;
+renderer.setPixelRatio(maxPR);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -44,13 +48,15 @@ function build() {
   const sky = createSky(renderer, world, SUN_DIR);
   world.environment = sky.envTexture;
   world.environmentIntensity = 0.9;
-  world.add(createTerrain(patchMaterial(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85 }), 'terrain')));
+  // Double-sided: the mirrored reflection camera sees gentle shores from below; the
+  // opaque underside must block its rays (dark band under the shore, as in a real lake).
+  world.add(createTerrain(patchMaterial(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, side: THREE.DoubleSide }), 'terrain')));
   const props = createProps();
   world.add(props.group);
   const rover = new Rover(props.obstacles);
   world.add(rover.group);
 
-  const water = createWaterSurface(sky.cubeTexture);
+  const water = createWaterSurface(renderer, sky.cubeTexture);
   const particles = createParticles();
   const overlay = new THREE.Scene();
   overlay.add(water, particles);
@@ -123,11 +129,24 @@ window.addEventListener('keydown', (e) => {
 
 function resize() {
   const w = window.innerWidth, h = window.innerHeight;
+  renderer.setPixelRatio(maxPR * renderScale);
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   const pr = renderer.getPixelRatio();
   pipeline.setSize(Math.floor(w * pr), Math.floor(h * pr));
+}
+
+// Adaptive resolution: keep the frame rate near 45–60 fps on slower GPUs.
+let perfAcc = 0, perfN = 0;
+function adaptResolution(dt) {
+  if (fixedPR) return;
+  perfAcc += dt; perfN++;
+  if (perfAcc < 2) return;
+  const fps = perfN / perfAcc;
+  perfAcc = 0; perfN = 0;
+  const next = fps < 42 ? Math.max(0.55, renderScale * 0.85) : fps > 57 ? Math.min(1, renderScale * 1.1) : renderScale;
+  if (next !== renderScale) { renderScale = next; resize(); }
 }
 window.addEventListener('resize', resize);
 resize();
@@ -154,7 +173,9 @@ let fpsAcc = 0, fpsN = 0;
 const clock0 = performance.now();
 
 function frame(now) {
-  step(Math.min(0.05, (now - last) / 1000), (now - clock0) / 1000);
+  const dt = Math.min(0.05, (now - last) / 1000);
+  adaptResolution(dt);
+  step(dt, (now - clock0) / 1000);
   last = now;
   requestAnimationFrame(frame);
 }

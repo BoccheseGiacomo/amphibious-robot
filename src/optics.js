@@ -19,6 +19,7 @@ export const optics = {
   uHazeDensity: { value: 0.0001 },
   uHazeFalloff: { value: 0.0011 },
   uCaustics: { value: 1.0 },
+  uDetail: { value: 1.0 },                             // 0 in the reflection pass: skip fine surface detail
   // Bore of the submerged pipe: its interior receives no ambient light.
   uPipeMouth: { value: new THREE.Vector3() },
   uPipeDir: { value: new THREE.Vector3(0, 0, -1) },   // from the mouth into the pipe
@@ -83,6 +84,7 @@ uniform vec3 uHazeColor;
 uniform float uHazeDensity;
 uniform float uHazeFalloff;
 uniform float uCaustics;
+uniform float uDetail;
 uniform vec3 uPipeMouth;
 uniform vec3 uPipeDir;
 uniform float uPipeR;
@@ -274,6 +276,7 @@ void terrainSurface(vec3 p, vec3 n, inout vec3 col, inout vec3 bump, inout float
   vec2 g = vec2(0.0); float ao = 1.0;
   float cover = clamp(0.82 + (mid - 0.5) * 0.4, 0.55, 0.95);
   cover = mix(cover, 0.97, smoothstep(-0.5, 0.2, p.y));
+  if (uDetail < 0.5) fw = 1e3;   // reflection pass: mean colours only
   stoneLayer(p.xz, 9.0, 0.62, cover, fw, 0.22, gravel, g, ao);
   float stones = 0.22 * smoothstep(0.3, 0.7, big + 0.2) * mix(1.0, 0.3, smoothstep(-0.5, 0.2, p.y));
   stoneLayer(p.xz + 17.3, 2.7, 0.44, stones, fw, 0.28, gravel, g, ao);
