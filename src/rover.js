@@ -46,7 +46,8 @@ function beltPoint(u) {
 
 function buildModel() {
   const mat = (o, kind = 'plain') => patchMaterial(new THREE.MeshStandardMaterial(o), kind);
-  const yellow = mat({ color: 0xd98a1e, roughness: 0.45, metalness: 0.1 });
+  const body = mat({ color: 0xd6d4cc, roughness: 0.4, metalness: 0.05 });
+  const accent = mat({ color: 0xd98a1e, roughness: 0.45, metalness: 0.1 });
   const rubber = mat({ color: 0x141414, roughness: 0.92 });
   const metal = mat({ color: 0x8a8d90, roughness: 0.4, metalness: 0.8 });
   const glass = mat({ color: 0x0b1015, roughness: 0.06 });
@@ -63,8 +64,8 @@ function buildModel() {
   };
 
   // Chassis and cylindrical electronics housing.
-  add(group, new THREE.BoxGeometry(0.44, 0.2, 0.9), yellow, 0, 0.24, 0);
-  add(group, new THREE.CylinderGeometry(0.13, 0.13, 0.72, 28).rotateX(Math.PI / 2), yellow, 0, 0.40, 0.03);
+  add(group, new THREE.BoxGeometry(0.44, 0.2, 0.9), accent, 0, 0.24, 0);
+  add(group, new THREE.CylinderGeometry(0.13, 0.13, 0.72, 28).rotateX(Math.PI / 2), body, 0, 0.40, 0.03);
   for (const z of [-0.335, 0.395]) add(group, new THREE.CylinderGeometry(0.137, 0.137, 0.03, 28).rotateX(Math.PI / 2), metal, 0, 0.40, z);
 
   // Tracks: rubber belt body, moving cleats, sprocket hubs.
@@ -108,7 +109,7 @@ function buildModel() {
   const tilt = new THREE.Group();
   tilt.position.y = 0.1;
   pan.add(tilt);
-  add(tilt, new THREE.CylinderGeometry(0.06, 0.06, 0.15, 20).rotateX(Math.PI / 2), yellow);
+  add(tilt, new THREE.CylinderGeometry(0.06, 0.06, 0.15, 20).rotateX(Math.PI / 2), accent);
   add(tilt, new THREE.SphereGeometry(0.058, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(-Math.PI / 2), glass, 0, 0, -0.075);
   const camAnchor = new THREE.Object3D();
   camAnchor.position.z = -0.14;

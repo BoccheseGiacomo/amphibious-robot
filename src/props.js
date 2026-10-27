@@ -1,4 +1,4 @@
-// Scene dressing: rocks, conifers, aquatic weeds, sunken logs and the intake pipe.
+// Scene dressing: rocks, aquatic weeds, sunken logs and the intake pipe.
 import * as THREE from 'three';
 import { heightAt, normalAt, shoreDistance, mulberry32, PIPE, START } from './terrain.js';
 import { patchMaterial } from './optics.js';
@@ -104,22 +104,22 @@ function createRocks(rand) {
   };
 
   // Lake bed around the route, denser on the steep drop-off.
-  for (let i = 0; i < 2600; i++) {
-    const x = (rand() - 0.5) * 220, z = 25 - rand() * 230;
+  for (let i = 0; i < 1000; i++) {
+    const x = (rand() - 0.5) * 170, z = 20 - rand() * 90;
     const slope = 1 - normalAt(x, z, _n).y;
     if (rand() > 0.12 + slope * 3.0) continue;
     place(x, z, 0.12 + Math.pow(rand(), 3) * 1.3);
   }
   // Shoreline cobbles and boulders.
-  for (let i = 0; i < 2000; i++) {
-    const x = (rand() - 0.5) * 700, z = 60 - rand() * 120;
+  for (let i = 0; i < 6000; i++) {
+    const x = (rand() - 0.5) * 360, z = 40 - rand() * 280;
     const s = shoreDistance(x, z);
-    if (Math.abs(s) > 18 || rand() > 0.35) continue;
+    if (Math.abs(s) > 12 || rand() > 0.35) continue;
     place(x, z, 0.15 + Math.pow(rand(), 4) * 1.6);
   }
   // Large erratic boulders.
   for (let i = 0; i < 40; i++) {
-    const x = (rand() - 0.5) * 400, z = 80 - rand() * 330;
+    const x = (rand() - 0.5) * 300, z = 60 - rand() * 200;
     place(x, z, 1.4 + rand() * 2.2);
   }
 
@@ -153,71 +153,6 @@ function pipeClearance(x, z) {
   const len2 = ax * ax + az * az;
   const t = Math.min(1, Math.max(-14 / Math.sqrt(len2), ((x - PIPE.mouth.x) * ax + (z - PIPE.mouth.z) * az) / len2));
   return Math.hypot(x - (PIPE.mouth.x + ax * t), z - (PIPE.mouth.z + az * t));
-}
-
-// --- conifers --------------------------------------------------------------------
-function makeConiferGeometry() {
-  // Spruce silhouette: drooping whorls of branches narrowing towards the top.
-  const prof = [[0.0, 0.0], [0.03, 0.0], [0.03, 0.08]];
-  const tiers = 7;
-  for (let i = 0; i < tiers; i++) {
-    const t0 = 0.08 + i * 0.12, w = 0.36 * (1 - i / (tiers + 0.6));
-    prof.push([w, t0 + 0.02], [w * 0.55, t0 + 0.1]);
-  }
-  prof.push([0.0, 1.0]);
-  const geo = new THREE.LatheGeometry(prof.map(([r, y]) => new THREE.Vector2(r, y)), 11);
-  const p = geo.attributes.position;
-  const rand = mulberry32(7);
-  const jitter = new Map();
-  const col = new Float32Array(p.count * 3);
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-    const key = `${x.toFixed(3)},${y.toFixed(3)},${z.toFixed(3)}`;
-    if (!jitter.has(key)) jitter.set(key, 0.8 + rand() * 0.4);
-    const j = y > 0.08 ? jitter.get(key) : 1;
-    p.setXYZ(i, x * j, y, z * j);
-    const trunk = y < 0.081;
-    const shade = 0.45 + 0.55 * Math.min(1, y * 1.3);
-    col[i * 3] = trunk ? 0.16 : 0.05 * shade;
-    col[i * 3 + 1] = trunk ? 0.11 : 0.08 * shade;
-    col[i * 3 + 2] = trunk ? 0.07 : 0.04 * shade;
-  }
-  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  geo.computeVertexNormals();
-  return geo;
-}
-
-function createTrees(rand) {
-  const material = patchMaterial(new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.92 }), 'plain');
-  const list = [];
-  for (let i = 0; i < 60000 && list.length < 6000; i++) {
-    const a = rand() * Math.PI * 2;
-    const r = 40 + Math.sqrt(rand()) * 2400;
-    const x = Math.cos(a) * r, z = -300 + Math.sin(a) * r * 1.2;
-    const s = shoreDistance(x, z);
-    if (s < 30) continue;
-    const y = heightAt(x, z);
-    if (y < 2.5 || y > 1350) continue;
-    const slope = 1 - normalAt(x, z, _n).y;
-    if (slope > 0.55) continue;
-    const forest = fbm3(x * 0.004 + 9, 0, z * 0.004, 3);
-    if (forest + (rand() - 0.5) * 0.25 < 0.47) continue;
-    const h = 11 + rand() * 18;
-    _p.set(x, y - 0.6, z);
-    _q.setFromEuler(_e.set((rand() - 0.5) * 0.06, rand() * 6.28, (rand() - 0.5) * 0.06));
-    _s.set(h * (0.85 + rand() * 0.3), h, h * (0.85 + rand() * 0.3));
-    list.push(new THREE.Matrix4().compose(_p.clone(), _q.clone(), _s.clone()));
-  }
-  const mesh = new THREE.InstancedMesh(makeConiferGeometry(), material, list.length);
-  const c = new THREE.Color();
-  list.forEach((m, i) => {
-    mesh.setMatrixAt(i, m);
-    const g = 0.75 + rand() * 0.5;
-    mesh.setColorAt(i, c.setRGB(g * (0.9 + rand() * 0.2), g, g * (0.85 + rand() * 0.2)));
-  });
-  mesh.receiveShadow = true;
-  mesh.computeBoundingSphere();
-  return mesh;
 }
 
 // --- aquatic weeds ---------------------------------------------------------------
@@ -257,8 +192,8 @@ function makeTuftGeometry(rand) {
 function createWeeds(rand) {
   const material = patchMaterial(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.75, side: THREE.DoubleSide }), 'weed');
   const list = [];
-  for (let i = 0; i < 40000 && list.length < 3500; i++) {
-    const x = (rand() - 0.5) * 260, z = 22 - rand() * 200;
+  for (let i = 0; i < 40000 && list.length < 2500; i++) {
+    const x = (rand() - 0.5) * 180, z = 18 - rand() * 60;
     const y = heightAt(x, z);
     if (y > -0.8 || y < -9) continue;
     const cluster = fbm3(x * 0.08, 3.3, z * 0.08, 3);
@@ -285,7 +220,7 @@ function createWeeds(rand) {
 function createLogs(rand) {
   const material = patchMaterial(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 }), 'wood');
   const group = new THREE.Group();
-  const spots = [[-14, -52], [21, -84], [-6, -96], [30, -40]];
+  const spots = [[-10, -2], [14, -12], [-8, -20], [22, 4]];
   for (const [x, z] of spots) {
     const len = 4 + rand() * 5, r = 0.14 + rand() * 0.12;
     const geo = new THREE.CylinderGeometry(r * 0.8, r, len, 14, 1);
@@ -376,6 +311,6 @@ export function createProps() {
   const rand = mulberry32(2026);
   const group = new THREE.Group();
   obstacles.length = 0;
-  group.add(createRocks(rand), createTrees(rand), createWeeds(rand), createLogs(rand), createPipe());
+  group.add(createRocks(rand), createWeeds(rand), createLogs(rand), createPipe());
   return { group, obstacles };
 }

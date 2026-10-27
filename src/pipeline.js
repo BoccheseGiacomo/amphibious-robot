@@ -19,7 +19,7 @@ function pass(fragmentShader, uniforms) {
 }
 
 export class Pipeline {
-  constructor(renderer, world, overlay, water, particles) {
+  constructor(renderer, world, overlay, water, particles, { samples = 4 } = {}) {
     this.renderer = renderer;
     this.world = world;
     this.overlay = overlay;
@@ -28,10 +28,10 @@ export class Pipeline {
 
     const hdr = { type: THREE.HalfFloatType, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
     this.mainRT = new THREE.WebGLRenderTarget(1, 1, {
-      ...hdr, samples: 4,
+      ...hdr, samples,
       depthTexture: new THREE.DepthTexture(1, 1, THREE.FloatType),
     });
-    this.reflRT = new THREE.WebGLRenderTarget(1, 1, { ...hdr, samples: 4 });
+    this.reflRT = new THREE.WebGLRenderTarget(1, 1, { ...hdr, samples });
     this.compRT = new THREE.WebGLRenderTarget(1, 1, { ...hdr, depthBuffer: false });
     this.raysRT = new THREE.WebGLRenderTarget(1, 1, { ...hdr, depthBuffer: false });
     this.bloomA = new THREE.WebGLRenderTarget(1, 1, { ...hdr, depthBuffer: false });
@@ -149,7 +149,7 @@ export class Pipeline {
         vec2 q = vUv - 0.5;
         c *= 1.0 - dot(q, q) * mix(0.45, 1.1, uUnder);
         float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
-        c = max(mix(vec3(l), c, 1.12), 0.0);
+        c = max(mix(vec3(l), c, mix(1.12, 0.92, uUnder)), 0.0);
         gl_FragColor = vec4(c, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>

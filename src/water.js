@@ -173,8 +173,8 @@ export function createWaterSurface(renderer, skyCube) {
     depthWrite: false,
     side: THREE.DoubleSide,
   });
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(14000, 14000).rotateX(-Math.PI / 2), material);
-  mesh.position.set(0, 0, -600);
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400).rotateX(-Math.PI / 2), material);
+  mesh.position.set(0, 0, -40);
   mesh.frustumCulled = false;
   return mesh;
 }

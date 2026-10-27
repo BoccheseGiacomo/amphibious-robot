@@ -53,16 +53,38 @@ export function fbm(x, y, oct) {
   return s;
 }
 
-function ridged(x, y, oct) {
-  let a = 0.5, f = 1, s = 0, w = 1;
+// Value noise with analytic derivatives (quintic interpolation): [value, d/dx, d/dy], value in [-1, 1].
+function hash2(i, j) {
+  let h = (Math.imul(i, 374761393) + Math.imul(j, 668265263)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+const _nd = [0, 0, 0];
+function noised(x, y) {
+  const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
+  const ux = fx * fx * fx * (fx * (fx * 6 - 15) + 10), uy = fy * fy * fy * (fy * (fy * 6 - 15) + 10);
+  const dux = 30 * fx * fx * (fx * (fx - 2) + 1), duy = 30 * fy * fy * (fy * (fy - 2) + 1);
+  const a = hash2(ix, iy), b = hash2(ix + 1, iy), c = hash2(ix, iy + 1), d = hash2(ix + 1, iy + 1);
+  const k1 = b - a, k2 = c - a, k3 = a - b - c + d;
+  _nd[0] = 2 * (a + k1 * ux + k2 * uy + k3 * ux * uy) - 1;
+  _nd[1] = 2 * dux * (k1 + k3 * uy);
+  _nd[2] = 2 * duy * (k2 + k3 * ux);
+  return _nd;
+}
+
+// Erosion-like fBm: detail is damped where the accumulated slope is high, giving rounded
+// summits, smooth valleys and branching gullies instead of noisy spikes.
+function erodedFbm(x, y, oct) {
+  let sum = 0, amp = 0.5, dx = 0, dy = 0;
   for (let i = 0; i < oct; i++) {
-    let n = 1 - Math.abs(noise2(x * f + i * 7.3, y * f - i * 3.1));
-    n *= n * w;
-    w = Math.min(1, n * 2);
-    s += n * a;
-    f *= 2.1; a *= 0.5;
+    const n = noised(x, y);
+    dx += n[1]; dy += n[2];
+    sum += amp * n[0] / (1 + dx * dx + dy * dy);
+    amp *= 0.5;
+    const nx = 1.6 * x - 1.2 * y, ny = 1.2 * x + 1.6 * y;   // rotate and double the frequency
+    x = nx + 17.3; y = ny - 9.1;
   }
-  return s;
+  return sum;
 }
 
 export const smooth = (a, b, x) => {
@@ -71,15 +93,15 @@ export const smooth = (a, b, x) => {
 };
 
 // --- Lake basin ---------------------------------------------------------------
-// Elliptic lake; the playable shore is the southern edge near the origin (z ≈ 30).
-const LAKE = { cx: 0, cz: -650, rx: 1100, rz: 680 };
+// Small elliptic mountain lake (~300 x 220 m); the playable shore is its southern edge (z ≈ 15).
+const LAKE = { cx: 0, cz: -95, rx: 150, rz: 110 };
 
 // Signed horizontal distance to the shoreline in metres (negative inside the lake).
 export function shoreDistance(x, z) {
-  const play = Math.exp(-(x * x + (z - 30) * (z - 30)) / (2 * 200 * 200));
-  const k = 1 - 0.85 * play;
-  const wx = x + k * fbm(x * 0.0021, z * 0.0021, 3) * 170;
-  const wz = z + k * fbm(x * 0.0021 + 31.7, z * 0.0021 - 11.3, 3) * 170;
+  const play = Math.exp(-(x * x + (z - 15) * (z - 15)) / (2 * 70 * 70));
+  const k = 1 - 0.8 * play;
+  const wx = x + k * fbm(x * 0.015, z * 0.015, 3) * 25;
+  const wz = z + k * fbm(x * 0.015 + 31.7, z * 0.015 - 11.3, 3) * 25;
   const qx = (wx - LAKE.cx) / LAKE.rx, qz = (wz - LAKE.cz) / LAKE.rz;
   return (Math.hypot(qx, qz) - 1) * LAKE.rz;
 }
@@ -88,29 +110,28 @@ function baseHeight(x, z) {
   const s = shoreDistance(x, z);
   if (s < 0) {
     const d = -s;
-    // Beach shelf, littoral slope, drop-off to a ~19 m plateau, then the deep basin.
-    let h = -(8 * (1 - Math.exp(-d / 45)) + 11 * smooth(60, 135, d) + 25 * smooth(230, 650, d));
-    h += fbm(x * 0.012, z * 0.012, 4) * 2.2 * smooth(8, 60, d);
-    h += fbm(x * 0.07, z * 0.07, 2) * 0.25 * smooth(2, 12, d);
+    // Beach shelf, littoral slope, drop-off to a ~10 m plateau, then the ~20 m basin.
+    let h = -(2 * (1 - Math.exp(-d / 8)) + 3.5 * smooth(8, 24, d) + 4.5 * smooth(22, 42, d) + 9 * smooth(60, 115, d));
+    h += fbm(x * 0.05, z * 0.05, 4) * 0.7 * smooth(4, 20, d);
+    h += fbm(x * 0.2, z * 0.2, 2) * 0.12 * smooth(1, 6, d);
     return h;
   }
-  // Forested foothills, then rounded prealpine massifs with occasional rocky crests.
-  const hills = (fbm(x * 0.0035, z * 0.0035, 5) * 0.5 + 0.5) * 120 * smooth(25, 500, s);
-  const massif = (fbm(x * 0.0006 + 5.2, z * 0.0006 - 1.7, 5) * 0.5 + 0.5) * 850 * smooth(350, 2800, s);
-  const crest = Math.pow(ridged(x * 0.00038, z * 0.00038, 5), 2.0) * 750 * smooth(1000, 3800, s);
-  const detail = fbm(x * 0.07, z * 0.07, 2) * 0.25 * smooth(0, 10, s);
-  return s * 0.07 + hills + massif + crest + smooth(0, 2500, s) * 220 + detail;
+  // Meadow foothills, then eroded mountains rising to ~350 m above the lake.
+  const hills = (fbm(x * 0.02, z * 0.02, 4) * 0.5 + 0.5) * 14 * smooth(10, 70, s);
+  const mountains = (erodedFbm(x * 0.0022 + 3.1, z * 0.0022 - 7.7, 9) * 0.5 + 0.55) * 330 * smooth(60, 600, s);
+  const detail = fbm(x * 0.2, z * 0.2, 2) * 0.12 * smooth(0, 6, s);
+  return s * 0.09 + hills + mountains + smooth(0, 500, s) * 30 + detail;
 }
 
 // --- Submerged pipe -----------------------------------------------------------
 // Intake pipe, straight in plan, laid in 12 m sections that follow a smoothed bed
 // profile and are joined by flanges. Its open mouth faces the shore.
-const PM = { x: 8, z: -118 };       // mouth (plan position)
-const PE = { x: -60, z: -430 };     // far end
+const PM = { x: 5, z: -28 };        // mouth (plan position)
+const PE = { x: -20, z: -150 };     // far end, near the deepest part of the lake
 const P_AX = PE.x - PM.x, P_AZ = PE.z - PM.z;
 const P_LEN = Math.hypot(P_AX, P_AZ);
 const NSEC = Math.round(P_LEN / 12);
-const APRON = 14;                    // levelled area in front of the mouth (m)
+const APRON = 10;                    // levelled area in front of the mouth (m)
 
 const BED = (() => {
   let b = [];
@@ -142,7 +163,7 @@ export const PIPE = {
 
 // Rover start on the beach. The straight route from here to the mouth is kept free
 // of blocking rocks so a first drive is accessible.
-export const START = { x: 2, z: 40 };
+export const START = { x: 2, z: 24 };
 
 // Near the pipe the bed is filled up to its invert where the lake floor is lower,
 // and sediment may bury it up to ~60 % of its diameter where the floor is higher.
@@ -169,7 +190,7 @@ export function normalAt(x, z, out = new THREE.Vector3()) {
 }
 
 // --- Mesh ---------------------------------------------------------------------
-// Separable grid: uniform 0.6 m cells over the play area, geometric growth outwards.
+// Separable grid: uniform 0.5 m cells over the play area, geometric growth outwards.
 function axisCoords(center, halfInner, step, extent, outerCells) {
   const target = extent - halfInner;
   let lo = 1.0001, hi = 1.2;
@@ -189,8 +210,8 @@ function axisCoords(center, halfInner, step, extent, outerCells) {
 }
 
 export function createTerrain(material) {
-  const xs = axisCoords(0, 150, 0.6, 6500, 140);
-  const zs = axisCoords(-60, 150, 0.6, 6500, 140);
+  const xs = axisCoords(0, 110, 0.5, 1100, 230);
+  const zs = axisCoords(-40, 110, 0.5, 1100, 230);
   const nx = xs.length, nz = zs.length;
   const pos = new Float32Array(nx * nz * 3);
   let k = 0;
@@ -201,21 +222,48 @@ export function createTerrain(material) {
       pos[k++] = x; pos[k++] = heightAt(x, z); pos[k++] = z;
     }
   }
-  const idx = new Uint32Array((nx - 1) * (nz - 1) * 6);
-  k = 0;
-  for (let j = 0; j < nz - 1; j++) {
-    for (let i = 0; i < nx - 1; i++) {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setIndex(gridIndex(nx, 0, nx - 1, 0, nz - 1));
+  geo.computeVertexNormals();
+
+  // Tiles share the vertex buffers; each has its own index range and bounds, so the
+  // renderer can skip tiles outside the view (most of the terrain under water or far away).
+  const group = new THREE.Group();
+  const T = 64;
+  for (let j0 = 0; j0 < nz - 1; j0 += T) {
+    for (let i0 = 0; i0 < nx - 1; i0 += T) {
+      const i1 = Math.min(i0 + T, nx - 1), j1 = Math.min(j0 + T, nz - 1);
+      const tile = new THREE.BufferGeometry();
+      tile.setAttribute('position', geo.attributes.position);
+      tile.setAttribute('normal', geo.attributes.normal);
+      tile.setIndex(gridIndex(nx, i0, i1, j0, j1));
+      const box = new THREE.Box3();
+      for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i += Math.max(1, i1 - i0)) box.expandByPoint(new THREE.Vector3().fromArray(pos, (j * nx + i) * 3));
+      for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+        const y = pos[(j * nx + i) * 3 + 1];
+        box.min.y = Math.min(box.min.y, y); box.max.y = Math.max(box.max.y, y);
+      }
+      tile.boundingBox = box;
+      tile.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
+      const mesh = new THREE.Mesh(tile, material);
+      mesh.receiveShadow = true;
+      group.add(mesh);
+    }
+  }
+  return group;
+}
+
+// Two triangles per grid cell for cells [i0, i1) x [j0, j1) of a grid nx wide.
+function gridIndex(nx, i0, i1, j0, j1) {
+  const idx = new Uint32Array((i1 - i0) * (j1 - j0) * 6);
+  let k = 0;
+  for (let j = j0; j < j1; j++) {
+    for (let i = i0; i < i1; i++) {
       const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1;
       idx[k++] = a; idx[k++] = c; idx[k++] = b;
       idx[k++] = b; idx[k++] = c; idx[k++] = d;
     }
   }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setIndex(new THREE.BufferAttribute(idx, 1));
-  geo.computeVertexNormals();
-  geo.computeBoundingSphere();
-  const mesh = new THREE.Mesh(geo, material);
-  mesh.receiveShadow = true;
-  return mesh;
+  return new THREE.BufferAttribute(idx, 1);
 }

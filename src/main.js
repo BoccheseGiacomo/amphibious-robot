@@ -60,7 +60,8 @@ function build() {
   const particles = createParticles();
   const overlay = new THREE.Scene();
   overlay.add(water, particles);
-  return { sky, rover, pipeline: new Pipeline(renderer, world, overlay, water, particles) };
+  // Offline rendering (?pr=) supersamples instead of MSAA.
+  return { sky, rover, pipeline: new Pipeline(renderer, world, overlay, water, particles, { samples: fixedPR ? 0 : 4 }) };
 }
 
 const { sky, rover, pipeline } = build();
@@ -79,11 +80,11 @@ const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const pipeSide = new THREE.Vector3(-PIPE.dir.z, 0, PIPE.dir.x).normalize();
 const pipeView = PIPE.mouth.clone().addScaledVector(PIPE.dir, -4.5).addScaledVector(pipeSide, -4.0).add(new THREE.Vector3(0, 1.6, 0));
 const VIEWS = [
-  { name: 'Riva', pos: V(3, heightAt(3, 46) + 1.7, 46), target: V(14, 0, -80) },
-  { name: 'Bassofondo', pos: V(-3, -2.2, -12), target: V(2, -7, -60) },
-  { name: 'Scarpata', pos: V(3, heightAt(3, -86) + 1.6, -86), target: V(6, heightAt(6, -104) + 0.5, -104) },
+  { name: 'Riva', pos: V(3, heightAt(3, 32) + 1.7, 32), target: V(8, 0, -40) },
+  { name: 'Bassofondo', pos: V(-3, heightAt(-3, 2) + 1.0, 2), target: V(2, heightAt(2, -22) + 0.5, -22) },
+  { name: 'Scarpata', pos: V(3, heightAt(3, -10) + 1.5, -10), target: V(5, heightAt(5, -24) + 0.5, -24) },
   { name: 'Condotta', pos: pipeView, target: PIPE.mouth.clone().addScaledVector(PIPE.dir, 2.5) },
-  { name: 'Panoramica', pos: V(160, 70, 120), target: V(0, -5, -160) },
+  { name: 'Panoramica', pos: V(90, 45, 75), target: V(0, -5, -50) },
 ];
 
 // Views: 'esterna' (chase), 'bordo' (rover camera), 'libera' (free observer).
@@ -180,6 +181,24 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+// Renders the current camera pose. snap = true sets the eye adaptation instantly (cuts);
+// fade scales the final exposure (fades to black in the offline video).
+function renderView(dt, time, snap = false, fade = 1) {
+  // Under water nothing beyond a few hundred metres survives attenuation: shorter far plane, fewer draws.
+  const far = camera.position.y < 0 ? 400 : 20000;
+  if (camera.far !== far) { camera.far = far; camera.updateProjectionMatrix(); }
+  camera.updateMatrixWorld();
+  updateSunShadow();
+  sky.update(time);
+
+  // Eye adaptation: brighter exposure as ambient light fades with depth.
+  const depth = Math.max(0, -camera.position.y);
+  const target = 0.55 * (camera.position.y < 0 ? 2.2 + 3.2 * THREE.MathUtils.smoothstep(depth, 0, 20) : 1);
+  exposure = snap ? target : exposure + (target - exposure) * (1 - Math.exp(-dt * 2.5));
+
+  pipeline.render(camera, time, exposure * fade);
+}
+
 const _q = new THREE.Quaternion();
 function step(dt, time) {
   const drive = mode !== 'libera';
@@ -193,16 +212,7 @@ function step(dt, time) {
     rover.camAnchor.getWorldPosition(camera.position);
     camera.quaternion.copy(rover.camAnchor.getWorldQuaternion(_q));
   }
-  camera.updateMatrixWorld();
-  updateSunShadow();
-  sky.update(time);
-
-  // Eye adaptation: brighter exposure as ambient light fades with depth.
-  const depth = Math.max(0, -camera.position.y);
-  const target = 0.55 * (camera.position.y < 0 ? 2.2 + 3.2 * THREE.MathUtils.smoothstep(depth, 0, 20) : 1);
-  exposure += (target - exposure) * (1 - Math.exp(-dt * 2.5));
-
-  pipeline.render(camera, time, exposure);
+  renderView(dt, time);
 
   fpsAcc += dt; fpsN++;
   if (fpsAcc > 0.25) {
@@ -228,4 +238,4 @@ hud.loading.classList.add('hidden');
 // ?manual: no animation loop; frames are rendered on request (automated screenshots).
 const manual = new URLSearchParams(location.search).has('manual');
 if (!manual) requestAnimationFrame(frame);
-window.__lake = { goto, setMode, fly, chase, rover, camera, optics, step, pipeline, world };
+window.__lake = { THREE, goto, setMode, fly, chase, rover, camera, optics, step, renderView, pipeline, world, PIPE, START, heightAt };

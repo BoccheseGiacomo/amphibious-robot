@@ -79,7 +79,16 @@ export function createSky(renderer, scene, sunDir) {
   for (const c of cubeCam.children) c.layers.set(SKY_LAYER);
   cubeCam.position.set(0, 2, 0);
   scene.add(cubeCam);
+  // The analytic sky is bright below the horizon too; for lighting, the lower hemisphere
+  // must be the landscape (radiance of sunlit forest and meadow, albedo ~0.1).
+  const ground = new THREE.Mesh(
+    new THREE.SphereGeometry(9000, 32, 16, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: new THREE.Color().setRGB(0.07, 0.09, 0.055, THREE.LinearSRGBColorSpace), side: THREE.BackSide, toneMapped: false }),
+  );
+  ground.layers.set(SKY_LAYER);
+  scene.add(ground);
   cubeCam.update(renderer, scene);
+  scene.remove(ground);
 
   const pmrem = new THREE.PMREMGenerator(renderer);
   const env = pmrem.fromCubemap(cubeRT.texture);

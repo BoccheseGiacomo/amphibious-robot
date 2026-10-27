@@ -16,8 +16,8 @@ export const optics = {
   uWaterKd: { value: new THREE.Vector3(0.27, 0.06, 0.075) },
   uWaterScatter: { value: new THREE.Vector3(0.010, 0.045, 0.050) },
   uHazeColor: { value: new THREE.Vector3(0.50, 0.60, 0.76) },
-  uHazeDensity: { value: 0.0001 },
-  uHazeFalloff: { value: 0.0011 },
+  uHazeDensity: { value: 0.0004 },
+  uHazeFalloff: { value: 0.004 },
   uCaustics: { value: 1.0 },
   uDetail: { value: 1.0 },                             // 0 in the reflection pass: skip fine surface detail
   // Bore of the submerged pipe: its interior receives no ambient light.
@@ -300,25 +300,22 @@ void terrainSurface(vec3 p, vec3 n, inout vec3 col, inout vec3 bump, inout float
   if (depth <= 0.0) col *= mix(1.0, 0.58, wet);
 
   // Meadow, forest, rock and snow on land.
-  float beachTop = mix(1.7, 0.45, smoothstep(150.0, 450.0, length(p.xz - vec2(0.0, -40.0))));
+  float beachTop = mix(1.5, 0.45, smoothstep(70.0, 200.0, length(p.xz - vec2(0.0, -10.0))));
   float grass = smoothstep(beachTop - 0.7, beachTop + 0.7, p.y + (mid - 0.5) * 1.6) * (1.0 - smoothstep(0.32, 0.5, slope));
   vec3 grassCol = mix(vec3(0.05, 0.085, 0.02), vec3(0.12, 0.15, 0.04), n_fbm2(p.xz * 0.37)) * (0.75 + 0.5 * big);
   col = mix(col, grassCol, grass);
   bumpK *= 1.0 - grass * 0.7;
 
-  float forest = smoothstep(12.0, 30.0, p.y + (big - 0.5) * 30.0) * (1.0 - smoothstep(0.5, 0.72, slope));
-  forest *= smoothstep(0.22, 0.4, n_fbm2(p.xz * 0.0045 + 9.0) + 0.2 - smoothstep(1300.0, 1700.0, p.y));
+  float forest = smoothstep(6.0, 18.0, p.y + (big - 0.5) * 16.0) * (1.0 - smoothstep(0.55, 0.75, slope));
+  forest *= smoothstep(0.22, 0.4, n_fbm2(p.xz * 0.02 + 9.0) + 0.2 - smoothstep(330.0, 450.0, p.y));
   vec3 forestCol = mix(vec3(0.018, 0.034, 0.014), vec3(0.045, 0.068, 0.024), n_fbm2(p.xz * 0.06));
   col = mix(col, forestCol, forest);
 
-  float rock = smoothstep(0.4, 0.6, slope + (mid - 0.5) * 0.25);
-  vec3 rockCol = mix(vec3(0.24, 0.235, 0.22), vec3(0.38, 0.37, 0.35), smoothstep(600.0, 1600.0, p.y));
-  rockCol *= 0.75 + 0.4 * n_fbm2(p.xz * 0.05 + p.y * 0.03);
+  float rock = smoothstep(0.5, 0.68, slope + (mid - 0.5) * 0.25);
+  vec3 rockCol = mix(vec3(0.21, 0.205, 0.19), vec3(0.31, 0.30, 0.285), smoothstep(150.0, 420.0, p.y));
+  rockCol *= 0.7 + 0.45 * n_fbm2(p.xz * 0.12 + p.y * 0.08);
   col = mix(col, depth > 0.0 ? mix(rockCol * 0.75, silt, siltAmt * 0.6) : rockCol, rock);
 
-  float snow = smoothstep(1850.0, 2000.0, p.y + (big - 0.5) * 300.0) * (1.0 - smoothstep(0.5, 0.75, slope));
-  col = mix(col, vec3(0.85, 0.87, 0.9), snow);
-  rough = mix(rough, 0.6, snow);
 
   bump = -vec3(g.x, 0.0, g.y) * bumpK;
 }
