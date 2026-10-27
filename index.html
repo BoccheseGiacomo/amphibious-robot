@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rover anfibio — Lago</title>
+  <style>
+    :root { --fg: #eef3f1; --muted: #a9b8b4; --panel: rgba(10, 18, 20, 0.55); }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0b1214; color: var(--fg);
+      font: 13px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    canvas { display: block; width: 100vw; height: 100vh; cursor: grab; }
+    canvas:active { cursor: grabbing; }
+    .panel { position: fixed; background: var(--panel); backdrop-filter: blur(8px); border-radius: 8px; padding: 10px 14px; }
+    #status { top: 16px; left: 16px; display: flex; gap: 14px; align-items: baseline; }
+    #depth { font-size: 15px; font-variant-numeric: tabular-nums; }
+    #fps { color: var(--muted); font-variant-numeric: tabular-nums; }
+    #help { bottom: 16px; left: 16px; color: var(--muted); }
+    #help b { color: var(--fg); font-weight: 600; }
+    #loading { inset: 0; display: grid; place-items: center; background: #0b1214; font-size: 15px; position: fixed; }
+    .hidden { display: none !important; }
+  </style>
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three.module.min.js" } }
+  </script>
+</head>
+<body>
+  <canvas id="view"></canvas>
+  <div id="status" class="panel"><span id="depth"></span><span id="fps"></span></div>
+  <div id="help" class="panel">
+    <b>Trascina</b> guarda · <b>W A S D</b> muovi · <b>E / Q</b> su / giù · <b>Shift</b> veloce · <b>Frecce</b> ruota ·
+    <b>1–5</b> viste (riva, bassofondo, scarpata, condotta, panoramica) · <b>H</b> nascondi
+  </div>
+  <div id="loading">Generazione del lago…</div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
